@@ -1,0 +1,2 @@
+cargo build --release --manifest-path=server/Cargo.toml
+cargo build --release --manifest-path=client/Cargo.toml
