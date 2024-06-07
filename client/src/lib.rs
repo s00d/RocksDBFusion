@@ -1,9 +1,30 @@
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use bytes::BytesMut;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use ext_php_rs::prelude::*;
+use futures::SinkExt;
+use futures::StreamExt;
+use bytes::Bytes;
+
+async fn send_request(host: &str, port: u16, request: Request) -> Result<Response, String> {
+    let addr = format!("{}:{}", host, port);
+    let stream = TcpStream::connect(&addr).await.map_err(|e| format!("Connection error: {}", e))?;
+    let mut socket = Framed::new(stream, LengthDelimitedCodec::new());
+    let request_bytes = serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
+    socket.send(Bytes::from(request_bytes)).await.map_err(|e| format!("Send error: {}", e))?;
+
+    let response_bytes = match socket.next().await {
+        Some(Ok(bytes)) => bytes,
+        Some(Err(e)) => return Err(format!("Receive error: {}", e)),
+        None => return Err("Receive error: no response received".to_string()),
+    };
+
+    let response: Response = serde_json::from_slice(&response_bytes).map_err(|e| format!("Deserialization error: {}", e))?;
+    Ok(response)
+}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Request {
@@ -38,17 +59,6 @@ impl RocksDBClient {
         Ok(Self { host, port })
     }
 
-    async fn send_request(&self, request: Request) -> PhpResult<Response> {
-        let addr = format!("{}:{}", self.host, self.port);
-        let stream = TcpStream::connect(&addr).await.map_err(|e| format!("Connection error: {}", e))?;
-        let mut socket = Framed::new(stream, LengthDelimitedCodec::new());
-        let request_bytes = serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
-        socket.send(BytesMut::from(&request_bytes[..])).await.map_err(|e| format!("Send error: {}", e))?;
-        let response_bytes = socket.next().await.ok_or("Receive error")??;
-        let response: Response = serde_json::from_slice(&response_bytes).map_err(|e| format!("Deserialization error: {}", e))?;
-        Ok(response)
-    }
-
     #[php_method]
     pub fn put(&self, key: String, value: String, cf_name: Option<String>) -> PhpResult<()> {
         let request = Request {
@@ -62,9 +72,9 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -86,9 +96,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(response.result)
@@ -110,9 +119,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -134,9 +142,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -158,9 +165,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             let result: Vec<String> = serde_json::from_str(&response.result.unwrap_or("[]".to_string()))
@@ -184,9 +190,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -208,9 +213,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -232,9 +236,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -257,9 +260,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -281,9 +283,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -305,8 +306,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -328,9 +329,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -352,9 +352,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -377,9 +376,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -401,9 +399,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             let result: HashMap<String, i64> = serde_json::from_str(&response.result.unwrap_or("{}".to_string()))
@@ -427,9 +424,8 @@ impl RocksDBClient {
             backup_id: None,
             restore_path: None,
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
@@ -451,12 +447,312 @@ impl RocksDBClient {
             backup_id: Some(backup_id),
             restore_path: Some(restore_path),
         };
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.send_request(request))?;
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
             Ok(())
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    // -- write batch methods
+    #[php_method]
+    pub fn write_batch_put(&self, key: String, value: String, cf_name: Option<String>) -> PhpResult<()> {
+        let request = Request {
+            action: "write_batch_put".to_string(),
+            key: Some(key),
+            value: Some(value),
+            cf_name,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(())
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn write_batch_merge(&self, key: String, value: String, cf_name: Option<String>) -> PhpResult<()> {
+        let request = Request {
+            action: "write_batch_merge".to_string(),
+            key: Some(key),
+            value: Some(value),
+            cf_name,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(())
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn write_batch_delete(&self, key: String, cf_name: Option<String>) -> PhpResult<()> {
+        let request = Request {
+            action: "write_batch_delete".to_string(),
+            key: Some(key),
+            value: None,
+            cf_name,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(())
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn write_batch_write(&self) -> PhpResult<()> {
+        let request = Request {
+            action: "write_batch_write".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(())
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn write_batch_clear(&self) -> PhpResult<()> {
+        let request = Request {
+            action: "write_batch_clear".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(())
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn write_batch_destroy(&self) -> PhpResult<()> {
+        let request = Request {
+            action: "write_batch_destroy".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(())
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    // -- iterator methods
+    #[php_method]
+    pub fn seek_to_first(&self) -> PhpResult<Option<String>> {
+        let request = Request {
+            action: "seek_to_first".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(response.result)
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn seek_to_last(&self) -> PhpResult<Option<String>> {
+        let request = Request {
+            action: "seek_to_last".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(response.result)
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn seek(&self, key: String) -> PhpResult<Option<String>> {
+        let request = Request {
+            action: "seek".to_string(),
+            key: Some(key),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(response.result)
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn seek_for_prev(&self, key: String) -> PhpResult<Option<String>> {
+        let request = Request {
+            action: "seek_for_prev".to_string(),
+            key: Some(key),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(response.result)
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn valid(&self) -> PhpResult<bool> {
+        let request = Request {
+            action: "valid".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(response.result.unwrap().parse().unwrap_or(false))
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn next(&self) -> PhpResult<Option<String>> {
+        let request = Request {
+            action: "next".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(response.result)
+        } else {
+            Err(response.error.unwrap_or("Unknown error".to_string()).into())
+        }
+    }
+
+    #[php_method]
+    pub fn prev(&self) -> PhpResult<Option<String>> {
+        let request = Request {
+            action: "prev".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let response = Runtime::new().unwrap().block_on(send_request(&self.host, self.port, request))
+            .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
+
+        if response.success {
+            Ok(response.result)
         } else {
             Err(response.error.unwrap_or("Unknown error".to_string()).into())
         }

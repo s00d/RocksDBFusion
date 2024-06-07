@@ -1,15 +1,19 @@
+mod transaction;
+mod db_manager;
+mod backup_manager;
+
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use rust_rocksdb::{DB, Options, MergeOperands, ColumnFamilyDescriptor, DBWithThreadMode, SingleThreaded, TransactionDB, TransactionDBOptions, Transaction, TransactionOptions, WriteOptions, WriteBatchWithTransaction};
-use rust_rocksdb::backup::{BackupEngine, BackupEngineInfo, BackupEngineOptions, RestoreOptions};
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::time::Duration;
 use bytes::BytesMut;
 use tokio_stream::StreamExt;
 use futures::SinkExt;
+use crate::transaction::RocksDBTransaction;
+use crate::db_manager::RocksDBManager;
+use crate::backup_manager::RocksDBBackupManager;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -31,865 +35,777 @@ pub struct Response {
     error: Option<String>,
 }
 
-type DbInstance = Arc<Mutex<DBWithThreadMode<SingleThreaded>>>;
-type TxnDbInstance = Arc<Mutex<Option<RocksDBTransaction>>>;
-type BackupEngineInstance = Arc<Mutex<Option<BackupEngine>>>;
-type WriteBatchInstance = Arc<Mutex<Option<RocksDBWriteBatch>>>;
-
-fn json_merge(
-    _new_key: &[u8],
-    existing_val: Option<&[u8]>,
-    operands: &MergeOperands,
-) -> Option<Vec<u8>> {
-    let mut doc: Value = if let Some(val) = existing_val {
-        serde_json::from_slice(val).unwrap_or(Value::Array(vec![]))
-    } else {
-        Value::Array(vec![])
-    };
-
-    for op in operands {
-        if let Ok(patch) = serde_json::from_slice::<Value>(op) {
-            let p: json_patch::Patch = serde_json::from_value(patch).unwrap();
-            json_patch::patch(&mut doc, &p).unwrap();
-        }
-    }
-
-    Some(serde_json::to_vec(&doc).unwrap())
+#[derive(Clone)]
+pub struct RocksDBServer {
+    db_manager: Arc<RocksDBManager>,
+    backup_manager: RocksDBBackupManager,
+    txn_db: Arc<Mutex<Option<RocksDBTransaction>>>,
 }
 
-pub struct RocksDBTransaction {
-    transaction_db: Arc<TransactionDB<SingleThreaded>>,
-    transaction: Arc<Mutex<Option<Transaction<'static, TransactionDB<SingleThreaded>>>>>,
-}
+impl RocksDBServer {
+    pub fn new(db_path: String, backup_path: String, ttl_secs: Option<u64>) -> Result<Self, String> {
+        let db_manager = Arc::new(RocksDBManager::new(&*db_path.clone(), ttl_secs.clone())?);
+        let backup_manager = RocksDBBackupManager::new(&backup_path)?;
+        let txn_db: Arc<Mutex<Option<RocksDBTransaction>>> = Arc::new(Mutex::new(None));
 
-fn create_transaction(transaction_db: &Arc<TransactionDB<SingleThreaded>>) -> Transaction<'static, TransactionDB<SingleThreaded>> {
-    let txn_opts = TransactionOptions::default();
-    let write_opts = WriteOptions::default();
-    unsafe {
-        std::mem::transmute::<Transaction<TransactionDB<SingleThreaded>>, Transaction<'static, TransactionDB<SingleThreaded>>>(
-            transaction_db.transaction_opt(&write_opts, &txn_opts),
-        )
-    }
-}
-
-impl RocksDBTransaction {
-    pub fn new(path: String) -> Result<Self, String> {
-        let txn_db_opts = TransactionDBOptions::default();
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
-
-        let transaction_db = TransactionDB::<SingleThreaded>::open(&opts, &txn_db_opts, &path)
-            .map_err(|e| e.to_string())?;
-
-        let transaction_db = Arc::new(transaction_db);
-        let transaction = create_transaction(&transaction_db);
-
-        Ok(RocksDBTransaction {
-            transaction_db: Arc::clone(&transaction_db),
-            transaction: Arc::new(Mutex::new(Some(transaction))),
+        Ok(RocksDBServer {
+            db_manager,
+            backup_manager,
+            txn_db,
         })
     }
 
-    pub fn commit(&self) -> Result<(), String> {
-        let mut txn_guard = self.transaction.lock().unwrap();
-        if let Some(txn) = txn_guard.take() {
-            txn.commit().map_err(|e| e.to_string())?;
-            *txn_guard = Some(create_transaction(&self.transaction_db));
-            Ok(())
-        } else {
-            Err("No active transaction".to_string())
-        }
-    }
-
-    pub fn rollback(&self) -> Result<(), String> {
-        let mut txn_guard = self.transaction.lock().unwrap();
-        if let Some(txn) = txn_guard.take() {
-            txn.rollback().map_err(|e| e.to_string())?;
-            *txn_guard = Some(create_transaction(&self.transaction_db));
-            Ok(())
-        } else {
-            Err("No active transaction".to_string())
-        }
-    }
-
-    pub fn set_savepoint(&self) {
-        let txn_guard = self.transaction.lock().unwrap();
-        if let Some(ref txn) = *txn_guard {
-            txn.set_savepoint();
-        }
-    }
-
-    pub fn rollback_to_savepoint(&self) -> Result<(), String> {
-        let txn_guard = self.transaction.lock().unwrap();
-        if let Some(ref txn) = *txn_guard {
-            txn.rollback_to_savepoint().map_err(|e| e.to_string())
-        } else {
-            Err("No active transaction".to_string())
-        }
-    }
-
-    pub fn put(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        let txn_guard = self.transaction.lock().unwrap();
-        if let Some(ref txn) = *txn_guard {
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = self.transaction_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    txn.put_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
-                }
-                None => txn.put(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-            }
-        } else {
-            Err("No active transaction".to_string())
-        }
-    }
-
-    pub fn get(&self, key: String, cf_name: Option<String>) -> Result<Option<String>, String> {
-        let txn_guard = self.transaction.lock().unwrap();
-        if let Some(ref txn) = *txn_guard {
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = self.transaction_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    match txn.get_cf(&cf, key.as_bytes()) {
-                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
-                        Ok(None) => Ok(None),
-                        Err(e) => Err(e.to_string()),
-                    }
-                }
-                None => {
-                    match txn.get(key.as_bytes()) {
-                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
-                        Ok(None) => Ok(None),
-                        Err(e) => Err(e.to_string()),
-                    }
-                }
-            }
-        } else {
-            Err("No active transaction".to_string())
-        }
-    }
-
-    pub fn delete(&self, key: String, cf_name: Option<String>) -> Result<(), String> {
-        let txn_guard = self.transaction.lock().unwrap();
-        if let Some(ref txn) = *txn_guard {
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = self.transaction_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    txn.delete_cf(&cf, key.as_bytes()).map_err(|e| e.to_string())
-                }
-                None => txn.delete(key.as_bytes()).map_err(|e| e.to_string()),
-            }
-        } else {
-            Err("No active transaction".to_string())
-        }
-    }
-
-    pub fn merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        let txn_guard = self.transaction.lock().unwrap();
-        if let Some(ref txn) = *txn_guard {
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = self.transaction_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    txn.merge_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
-                }
-                None => txn.merge(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-            }
-        } else {
-            Err("No active transaction".to_string())
-        }
-    }
-}
-
-pub struct RocksDBWriteBatch {
-    db: Arc<DB>,
-    write_batch: Mutex<Option<WriteBatchWithTransaction<false>>>,
-}
-
-impl RocksDBWriteBatch {
-    pub fn new(path: String, ttl_secs: Option<u64>) -> Result<Self, String> {
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
-        opts.set_max_open_files(1000);
-        opts.set_log_level(rust_rocksdb::LogLevel::Warn);
-
-        let db = match ttl_secs {
-            Some(ttl) => {
-                let duration = Duration::from_secs(ttl);
-                DB::open_with_ttl(&opts, &path, duration)
-            }
-            None => DB::open(&opts, &path),
-        };
-
-        match db {
-            Ok(db) => Ok(RocksDBWriteBatch {
-                db: Arc::new(db),
-                write_batch: Mutex::new(None),
-            }),
-            Err(e) => Err(e.to_string()),
-        }
-    }
-
-    pub fn start(&self) -> Result<(), String> {
-        let mut batch = self.write_batch.lock().unwrap();
-        *batch = Some(WriteBatchWithTransaction::<false>::default());
-        Ok(())
-    }
-
-    pub fn put(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        let mut batch = self.write_batch.lock().unwrap();
-        if let Some(ref mut wb) = *batch {
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = self
-                        .db
-                        .cf_handle(&cf_name)
-                        .ok_or("Column family not found")?;
-                    wb.put_cf(&cf, key.as_bytes(), value.as_bytes());
-                }
-                None => {
-                    wb.put(key.as_bytes(), value.as_bytes());
-                }
-            }
-        } else {
-            return Err("WriteBatch not initialized".into());
-        }
-        Ok(())
-    }
-
-    pub fn merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        let mut batch = self.write_batch.lock().unwrap();
-        if let Some(ref mut wb) = *batch {
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = self
-                        .db
-                        .cf_handle(&cf_name)
-                        .ok_or("Column family not found")?;
-                    wb.merge_cf(&cf, key.as_bytes(), value.as_bytes());
-                }
-                None => {
-                    wb.merge(key.as_bytes(), value.as_bytes());
-                }
-            }
-        } else {
-            return Err("WriteBatch not initialized".into());
-        }
-        Ok(())
-    }
-
-    pub fn delete(&self, key: String, cf_name: Option<String>) -> Result<(), String> {
-        let mut batch = self.write_batch.lock().unwrap();
-        if let Some(ref mut wb) = *batch {
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = self
-                        .db
-                        .cf_handle(&cf_name)
-                        .ok_or("Column family not found")?;
-                    wb.delete_cf(&cf, key.as_bytes());
-                }
-                None => {
-                    wb.delete(key.as_bytes());
-                }
-            }
-        } else {
-            return Err("WriteBatch not initialized".into());
-        }
-        Ok(())
-    }
-
-    pub fn write(&self) -> Result<(), String> {
-        let mut batch = self.write_batch.lock().unwrap();
-        if let Some(wb) = batch.take() {
-            self.db
-                .write(wb)
-                .map_err(|e| e.to_string())?;
-        } else {
-            return Err("WriteBatch not initialized".into());
-        }
-        Ok(())
-    }
-
-    pub fn clear(&self) -> Result<(), String> {
-        let mut batch = self.write_batch.lock().unwrap();
-        if let Some(ref mut wb) = *batch {
-            wb.clear();
-        } else {
-            return Err("WriteBatch not initialized".into());
-        }
-        Ok(())
-    }
-
-    pub fn destroy(&self) -> Result<(), String> {
-        let mut batch = self.write_batch.lock().unwrap();
-        *batch = None;
-        Ok(())
-    }
-}
-
-async fn handle_client(
-    db: DbInstance,
-    txn_db: TxnDbInstance,
-    backup_engine: BackupEngineInstance,
-    mut write_batch: WriteBatchInstance,
-    mut socket: Framed<TcpStream, LengthDelimitedCodec>
-) {
-    while let Some(Ok(frame)) = socket.next().await {
-        let req: Request = serde_json::from_slice(&frame).unwrap();
-        let response = match req.action.as_str() {
-            "put" => handle_put(&db, req.key, req.value, req.cf_name).await,
-            "get" => handle_get(&db, req.key, req.cf_name).await,
-            "delete" => handle_delete(&db, req.key, req.cf_name).await,
-            "merge" => handle_merge(&db, req.key, req.value, req.cf_name).await,
-            "list_column_families" => handle_list_column_families(req.value).await,
-            "create_column_family" => handle_create_column_family(&db, req.value).await,
-            "drop_column_family" => handle_drop_column_family(&db, req.value).await,
-            "compact_range" => handle_compact_range(&db, req.key, req.value, req.cf_name).await,
-            "begin_transaction" => handle_begin_transaction(&txn_db).await,
-            "commit_transaction" => handle_commit_transaction(&txn_db).await,
-            "rollback_transaction" => handle_rollback_transaction(&txn_db).await,
-            "set_savepoint" => handle_set_savepoint(&txn_db).await,
-            "rollback_to_savepoint" => handle_rollback_to_savepoint(&txn_db).await,
-            "backup_create" => handle_backup_create(&backup_engine, &db).await,
-            "backup_info" => handle_backup_info(&backup_engine).await,
-            "backup_purge_old" => handle_backup_purge_old(&backup_engine, req.num_backups_to_keep).await,
-            "backup_restore" => handle_backup_restore(&backup_engine, req.backup_id, req.restore_path).await,
-            "write_batch_start" => handle_write_batch_start(&mut write_batch).await,
-            "write_batch_put" => handle_write_batch_put(&mut write_batch, req.key, req.value, req.cf_name).await,
-            "write_batch_merge" => handle_write_batch_merge(&mut write_batch, req.key, req.value, req.cf_name).await,
-            "write_batch_delete" => handle_write_batch_delete(&mut write_batch, req.key, req.cf_name).await,
-            "write_batch_write" => handle_write_batch_write(&mut write_batch).await,
-            "write_batch_clear" => handle_write_batch_clear(&mut write_batch).await,
-            "write_batch_destroy" => handle_write_batch_destroy(&mut write_batch).await,
-            "seek_to_first" => handle_seek_to_first(&db).await,
-            "seek_to_last" => handle_seek_to_last(&db).await,
-            "seek" => handle_seek(&db, req.key.unwrap_or_default()).await,
-            "seek_for_prev" => handle_seek_for_prev(&db, req.key.unwrap_or_default()).await,
-            "valid" => handle_valid(&db).await,
-            "next" => handle_next(&db).await,
-            "prev" => handle_prev(&db).await,
-            _ => Response { success: false, result: None, error: Some("Unknown action".to_string()) },
-        };
-        let response_bytes = serde_json::to_vec(&response).unwrap();
-        socket.send(BytesMut::from(&response_bytes[..]).into()).await.unwrap();
-    }
-}
-
-async fn handle_put(
-    db: &DbInstance,
-    key: Option<String>,
-    value: Option<String>,
-    cf_name: Option<String>
-) -> Response {
-    match (key, value) {
-        (Some(key), Some(value)) => {
-            let result = match cf_name {
-                Some(cf_name) => {
-                    let db = db.lock().unwrap();
-                    let cf = db.cf_handle(&cf_name).unwrap();
-                    db.put_cf(&cf, key, value)
-                }
-                None => db.lock().unwrap().put(key, value),
+    pub async fn handle_client(
+        &self,
+        mut socket: Framed<TcpStream, LengthDelimitedCodec>
+    ) {
+        while let Some(Ok(frame)) = socket.next().await {
+            let req: Request = serde_json::from_slice(&frame).unwrap();
+            let response = match req.action.as_str() {
+                "put" => self.handle_put(req.key, req.value, req.cf_name).await,
+                "get" => self.handle_get(req.key, req.cf_name).await,
+                "delete" => self.handle_delete(req.key, req.cf_name).await,
+                "merge" => self.handle_merge(req.key, req.value, req.cf_name).await,
+                "list_column_families" => self.handle_list_column_families(req.value).await,
+                "create_column_family" => self.handle_create_column_family(req.value).await,
+                "drop_column_family" => self.handle_drop_column_family(req.value).await,
+                "compact_range" => self.handle_compact_range(req.key, req.value, req.cf_name).await,
+                "begin_transaction" => self.handle_begin_transaction().await,
+                "commit_transaction" => self.handle_commit_transaction().await,
+                "rollback_transaction" => self.handle_rollback_transaction().await,
+                "transaction_put" => self.handle_transaction_put(req.key, req.value, req.cf_name).await,
+                "transaction_get" => self.handle_transaction_get(req.key, req.cf_name).await,
+                "transaction_delete" => self.handle_transaction_delete(req.key, req.cf_name).await,
+                "transaction_merge" => self.handle_transaction_merge(req.key, req.value, req.cf_name).await,
+                "set_savepoint" => self.handle_set_savepoint().await,
+                "rollback_to_savepoint" => self.handle_rollback_to_savepoint().await,
+                "backup_create" => self.handle_backup_create().await,
+                "backup_info" => self.handle_backup_info().await,
+                "backup_purge_old" => self.handle_backup_purge_old(req.num_backups_to_keep).await,
+                "backup_restore" => self.handle_backup_restore(req.backup_id, req.restore_path).await,
+                "write_batch_put" => self.handle_write_batch_put(req.key, req.value, req.cf_name).await,
+                "write_batch_merge" => self.handle_write_batch_merge(req.key, req.value, req.cf_name).await,
+                "write_batch_delete" => self.handle_write_batch_delete(req.key, req.cf_name).await,
+                "write_batch_write" => self.handle_write_batch_write().await,
+                "write_batch_clear" => self.handle_write_batch_clear().await,
+                "write_batch_destroy" => self.handle_write_batch_destroy().await,
+                "seek_to_first" => self.handle_seek_to_first().await,
+                "seek_to_last" => self.handle_seek_to_last().await,
+                "seek" => self.handle_seek(req.key.unwrap_or_default()).await,
+                "seek_for_prev" => self.handle_seek_for_prev(req.key.unwrap_or_default()).await,
+                "valid" => self.handle_valid().await,
+                "next" => self.handle_next().await,
+                "prev" => self.handle_prev().await,
+                _ => Response { success: false, result: None, error: Some("Unknown action".to_string()) },
             };
-            match result {
+            let response_bytes = serde_json::to_vec(&response).unwrap();
+            socket.send(BytesMut::from(&response_bytes[..]).into()).await.unwrap();
+        }
+    }
+
+    async fn handle_put(
+        &self,
+        key: Option<String>,
+        value: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match (key, value) {
+            (Some(key), Some(value)) => match self.db_manager.put(key, value, cf_name) {
                 Ok(_) => Response { success: true, result: None, error: None },
-                Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
-            }
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            },
+            _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) },
         }
-        _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
     }
-}
 
-async fn handle_get(
-    db: &DbInstance,
-    key: Option<String>,
-    cf_name: Option<String>
-) -> Response {
-    match key {
-        Some(key) => {
-            let result = match cf_name {
-                Some(cf_name) => {
-                    let db = db.lock().unwrap();
-                    let cf = db.cf_handle(&cf_name).unwrap();
-                    db.get_cf(&cf, key)
-                }
-                None => db.lock().unwrap().get(key),
-            };
-            match result {
-                Ok(Some(value)) => Response { success: true, result: Some(String::from_utf8(value).unwrap()), error: None },
+    async fn handle_get(
+        &self,
+        key: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match key {
+            Some(key) => match self.db_manager.get(key, cf_name) {
+                Ok(Some(value)) => Response { success: true, result: Some(value), error: None },
                 Ok(None) => Response { success: false, result: None, error: Some("Key not found".to_string()) },
-                Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
-            }
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            },
+            None => Response { success: false, result: None, error: Some("Missing key".to_string()) },
         }
-        None => Response { success: false, result: None, error: Some("Missing key".to_string()) }
     }
-}
 
-async fn handle_delete(
-    db: &DbInstance,
-    key: Option<String>,
-    cf_name: Option<String>
-) -> Response {
-    match key {
-        Some(key) => {
-            let result = match cf_name {
-                Some(cf_name) => {
-                    let db = db.lock().unwrap();
-                    let cf = db.cf_handle(&cf_name).unwrap();
-                    db.delete_cf(&cf, key)
-                }
-                None => db.lock().unwrap().delete(key),
-            };
-            match result {
+    async fn handle_delete(
+        &self,
+        key: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match key {
+            Some(key) => match self.db_manager.delete(key, cf_name) {
                 Ok(_) => Response { success: true, result: None, error: None },
-                Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
-            }
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            },
+            None => Response { success: false, result: None, error: Some("Missing key".to_string()) },
         }
-        None => Response { success: false, result: None, error: Some("Missing key".to_string()) }
     }
-}
 
-async fn handle_merge(
-    db: &DbInstance,
-    key: Option<String>,
-    value: Option<String>,
-    cf_name: Option<String>
-) -> Response {
-    match (key, value) {
-        (Some(key), Some(value)) => {
-            let result = match cf_name {
-                Some(cf_name) => {
-                    let db = db.lock().unwrap();
-                    let cf = db.cf_handle(&cf_name).unwrap();
-                    db.merge_cf(&cf, key, value)
-                }
-                None => db.lock().unwrap().merge(key, value),
-            };
-            match result {
+    async fn handle_merge(
+        &self,
+        key: Option<String>,
+        value: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match (key, value) {
+            (Some(key), Some(value)) => match self.db_manager.merge(key, value, cf_name) {
                 Ok(_) => Response { success: true, result: None, error: None },
-                Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
-            }
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            },
+            _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) },
         }
-        _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
     }
-}
 
-async fn handle_list_column_families(path: Option<String>) -> Response {
-    match path {
-        Some(path) => {
-            let opts = Options::default();
-            match DB::list_cf(&opts, &path) {
-                Ok(cfs) => Response { success: true, result: Some(serde_json::to_string(&cfs).unwrap()), error: None },
-                Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
-            }
-        }
-        None => Response { success: false, result: None, error: Some("Missing path".to_string()) }
-    }
-}
-
-async fn handle_create_column_family(
-    db: &DbInstance,
-    cf_name: Option<String>
-) -> Response {
-    match cf_name {
-        Some(cf_name) => {
-            let cf_exists = db.lock().unwrap().cf_handle(&cf_name).is_some();
-            if cf_exists {
-                Response { success: true, result: None, error: None }
-            } else {
-                let mut opts = Options::default();
-                opts.set_merge_operator_associative("json_merge", json_merge);
-                match db.lock().unwrap().create_cf(&cf_name, &opts) {
-                    Ok(_) => Response { success: true, result: None, error: None },
+    async fn handle_list_column_families(&self, path: Option<String>) -> Response {
+        match path {
+            Some(path) => {
+                match self.db_manager.list_column_families(path) {
+                    Ok(cfs) => Response { success: true, result: Some(serde_json::to_string(&cfs).unwrap()), error: None },
                     Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
                 }
             }
+            None => Response { success: false, result: None, error: Some("Missing path".to_string()) }
         }
-        None => Response { success: false, result: None, error: Some("Missing column family name".to_string()) }
     }
-}
 
-async fn handle_drop_column_family(
-    db: &DbInstance,
-    cf_name: Option<String>
-) -> Response {
-    match cf_name {
-        Some(cf_name) => {
-            let cf_exists = db.lock().unwrap().cf_handle(&cf_name).is_some();
-            if !cf_exists {
-                Response { success: true, result: None, error: None }
-            } else {
-                match db.lock().unwrap().drop_cf(&cf_name) {
-                    Ok(_) => Response { success: true, result: None, error: None },
-                    Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
+    async fn handle_create_column_family(
+        &self,
+        cf_name: Option<String>
+    ) -> Response {
+        match cf_name {
+            Some(cf_name) => match self.db_manager.create_column_family(cf_name) {
+                Ok(_) => Response { success: true, result: None, error: None },
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            },
+            None => Response { success: false, result: None, error: Some("Missing column family name".to_string()) },
+        }
+    }
+
+    async fn handle_drop_column_family(
+        &self,
+        cf_name: Option<String>
+    ) -> Response {
+        match cf_name {
+            Some(cf_name) => match self.db_manager.drop_column_family(cf_name) {
+                Ok(_) => Response { success: true, result: None, error: None },
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            },
+            None => Response { success: false, result: None, error: Some("Missing column family name".to_string()) },
+        }
+    }
+
+    async fn handle_compact_range(
+        &self,
+        start: Option<String>,
+        end: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match self.db_manager.compact_range(start, end, cf_name) {
+            Ok(_) => Response { success: true, result: None, error: None },
+            Err(e) => Response { success: false, result: None, error: Some(e) },
+        }
+    }
+
+    async fn handle_begin_transaction(&self) -> Response {
+        let mut txn_db = self.txn_db.lock().unwrap();
+        if txn_db.is_none() {
+            *txn_db = Some(RocksDBTransaction::new("path_to_your_db".to_string()).unwrap());
+            Response { success: true, result: None, error: None }
+        } else {
+            Response { success: false, result: None, error: Some("Transaction already in progress".to_string()) }
+        }
+    }
+
+    async fn handle_commit_transaction(&self) -> Response {
+        let mut txn_db = self.txn_db.lock().unwrap();
+        if let Some(ref txn) = *txn_db {
+            match txn.commit() {
+                Ok(_) => {
+                    *txn_db = None;
+                    Response { success: true, result: None, error: None }
+                },
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            }
+        } else {
+            Response { success: false, result: None, error: Some("No active transaction".to_string()) }
+        }
+    }
+
+    async fn handle_rollback_transaction(&self) -> Response {
+        let mut txn_db = self.txn_db.lock().unwrap();
+        if let Some(ref txn) = *txn_db {
+            match txn.rollback() {
+                Ok(_) => {
+                    *txn_db = None;
+                    Response { success: true, result: None, error: None }
+                },
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            }
+        } else {
+            Response { success: false, result: None, error: Some("No active transaction".to_string()) }
+        }
+    }
+
+    async fn handle_transaction_put(
+        &self,
+        key: Option<String>,
+        value: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match (key, value) {
+            (Some(key), Some(value)) => {
+                let txn_db = self.txn_db.lock().unwrap();
+                if let Some(ref txn) = *txn_db {
+                    match txn.put(key, value, cf_name) {
+                        Ok(_) => Response { success: true, result: None, error: None },
+                        Err(e) => Response { success: false, result: None, error: Some(e) },
+                    }
+                } else {
+                    Response { success: false, result: None, error: Some("No active transaction".to_string()) }
                 }
             }
-        }
-        None => Response { success: false, result: None, error: Some("Missing column family name".to_string()) }
-    }
-}
-
-async fn handle_compact_range(
-    db: &DbInstance,
-    start: Option<String>,
-    end: Option<String>,
-    cf_name: Option<String>
-) -> Response {
-    match cf_name {
-        Some(cf_name) => {
-            let db = db.lock().unwrap();
-            let cf = db.cf_handle(&cf_name).unwrap();
-            db.compact_range_cf(&cf, start.as_deref(), end.as_deref());
-        }
-        None => {
-            db.lock().unwrap().compact_range(start.as_deref(), end.as_deref());
+            _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
         }
     }
-    Response { success: true, result: None, error: None }
-}
 
-async fn handle_begin_transaction(txn_db: &TxnDbInstance) -> Response {
-    let mut txn_db = txn_db.lock().unwrap();
-    if txn_db.is_none() {
-        *txn_db = Some(RocksDBTransaction::new("path_to_your_db".to_string()).unwrap());
-        Response { success: true, result: None, error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Transaction already in progress".to_string()) }
-    }
-}
-
-async fn handle_commit_transaction(txn_db: &TxnDbInstance) -> Response {
-    let mut txn_db = txn_db.lock().unwrap();
-    if let Some(ref txn) = *txn_db {
-        match txn.commit() {
-            Ok(_) => {
-                *txn_db = None;
-                Response { success: true, result: None, error: None }
-            },
-            Err(e) => Response { success: false, result: None, error: Some(e) },
-        }
-    } else {
-        Response { success: false, result: None, error: Some("No active transaction".to_string()) }
-    }
-}
-
-async fn handle_rollback_transaction(txn_db: &TxnDbInstance) -> Response {
-    let mut txn_db = txn_db.lock().unwrap();
-    if let Some(ref txn) = *txn_db {
-        match txn.rollback() {
-            Ok(_) => {
-                *txn_db = None;
-                Response { success: true, result: None, error: None }
-            },
-            Err(e) => Response { success: false, result: None, error: Some(e) },
-        }
-    } else {
-        Response { success: false, result: None, error: Some("No active transaction".to_string()) }
-    }
-}
-
-async fn handle_set_savepoint(txn_db: &TxnDbInstance) -> Response {
-    let txn_db = txn_db.lock().unwrap();
-    if let Some(ref txn) = *txn_db {
-        txn.set_savepoint();
-        Response { success: true, result: None, error: None }
-    } else {
-        Response { success: false, result: None, error: Some("No active transaction".to_string()) }
-    }
-}
-
-async fn handle_rollback_to_savepoint(txn_db: &TxnDbInstance) -> Response {
-    let txn_db = txn_db.lock().unwrap();
-    if let Some(ref txn) = *txn_db {
-        match txn.rollback_to_savepoint() {
-            Ok(_) => Response { success: true, result: None, error: None },
-            Err(e) => Response { success: false, result: None, error: Some(e) },
-        }
-    } else {
-        Response { success: false, result: None, error: Some("No active transaction".to_string()) }
-    }
-}
-
-async fn handle_backup_create(backup_engine: &BackupEngineInstance, db: &DbInstance) -> Response {
-    let mut backup_engine = backup_engine.lock().unwrap();
-    let db = db.lock().unwrap();
-    if let Some(be) = backup_engine.as_mut() {
-        match be.create_new_backup(&*db) {
-            Ok(_) => Response { success: true, result: None, error: None },
-            Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
-        }
-    } else {
-        Response { success: false, result: None, error: Some("Backup engine not initialized".to_string()) }
-    }
-}
-
-#[derive(Debug, Serialize)]
-struct BackupInfo {
-    id: u32,
-    size: u64,
-    num_files: u32,
-    timestamp: i64,
-}
-
-impl From<&BackupEngineInfo> for BackupInfo {
-    fn from(info: &BackupEngineInfo) -> Self {
-        BackupInfo {
-            id: info.backup_id,
-            size: info.size,
-            num_files: info.num_files,
-            timestamp: info.timestamp,
+    async fn handle_transaction_get(
+        &self,
+        key: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match key {
+            Some(key) => {
+                let txn_db = self.txn_db.lock().unwrap();
+                if let Some(ref txn) = *txn_db {
+                    match txn.get(key, cf_name) {
+                        Ok(Some(value)) => Response { success: true, result: Some(value), error: None },
+                        Ok(None) => Response { success: false, result: None, error: Some("Key not found".to_string()) },
+                        Err(e) => Response { success: false, result: None, error: Some(e) },
+                    }
+                } else {
+                    Response { success: false, result: None, error: Some("No active transaction".to_string()) }
+                }
+            }
+            None => Response { success: false, result: None, error: Some("Missing key".to_string()) }
         }
     }
-}
 
-
-async fn handle_backup_info(backup_engine: &BackupEngineInstance) -> Response {
-    let backup_engine = backup_engine.lock().unwrap();
-    if let Some(be) = backup_engine.as_ref() {
-        let backup_info = be.get_backup_info();
-        let info: Vec<BackupInfo> = backup_info.iter().map(BackupInfo::from).collect();
-        let result = serde_json::to_string(&info).unwrap();
-        Response { success: true, result: Some(result), error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Backup engine not initialized".to_string()) }
+    async fn handle_transaction_delete(
+        &self,
+        key: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match key {
+            Some(key) => {
+                let txn_db = self.txn_db.lock().unwrap();
+                if let Some(ref txn) = *txn_db {
+                    match txn.delete(key, cf_name) {
+                        Ok(_) => Response { success: true, result: None, error: None },
+                        Err(e) => Response { success: false, result: None, error: Some(e) },
+                    }
+                } else {
+                    Response { success: false, result: None, error: Some("No active transaction".to_string()) }
+                }
+            }
+            None => Response { success: false, result: None, error: Some("Missing key".to_string()) }
+        }
     }
-}
 
-async fn handle_backup_purge_old(backup_engine: &BackupEngineInstance, num_backups_to_keep: Option<usize>) -> Response {
-    let mut backup_engine = backup_engine.lock().unwrap();
-    if let Some(be) = backup_engine.as_mut() {
-        match be.purge_old_backups(num_backups_to_keep.unwrap_or(0)) {
+    async fn handle_transaction_merge(
+        &self,
+        key: Option<String>,
+        value: Option<String>,
+        cf_name: Option<String>
+    ) -> Response {
+        match (key, value) {
+            (Some(key), Some(value)) => {
+                let txn_db = self.txn_db.lock().unwrap();
+                if let Some(ref txn) = *txn_db {
+                    match txn.merge(key, value, cf_name) {
+                        Ok(_) => Response { success: true, result: None, error: None },
+                        Err(e) => Response { success: false, result: None, error: Some(e) },
+                    }
+                } else {
+                    Response { success: false, result: None, error: Some("No active transaction".to_string()) }
+                }
+            }
+            _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
+        }
+    }
+
+    async fn handle_set_savepoint(&self) -> Response {
+        let txn_db = self.txn_db.lock().unwrap();
+        if let Some(ref txn) = *txn_db {
+            txn.set_savepoint();
+            Response { success: true, result: None, error: None }
+        } else {
+            Response { success: false, result: None, error: Some("No active transaction".to_string()) }
+        }
+    }
+
+    async fn handle_rollback_to_savepoint(&self) -> Response {
+        let txn_db = self.txn_db.lock().unwrap();
+        if let Some(ref txn) = *txn_db {
+            match txn.rollback_to_savepoint() {
+                Ok(_) => Response { success: true, result: None, error: None },
+                Err(e) => Response { success: false, result: None, error: Some(e) },
+            }
+        } else {
+            Response { success: false, result: None, error: Some("No active transaction".to_string()) }
+        }
+    }
+
+    async fn handle_backup_create(&self) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        match self.backup_manager.create_backup(&*db) {
             Ok(_) => Response { success: true, result: None, error: None },
             Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
         }
-    } else {
-        Response { success: false, result: None, error: Some("Backup engine not initialized".to_string()) }
     }
-}
 
-async fn handle_backup_restore(backup_engine: &BackupEngineInstance, backup_id: Option<u32>, restore_path: Option<String>) -> Response {
-    let mut backup_engine = backup_engine.lock().unwrap();
-    if let Some(be) = backup_engine.as_mut() {
+    async fn handle_backup_info(&self) -> Response {
+        match self.backup_manager.get_backup_info() {
+            Ok(info) => {
+                let result = serde_json::to_string(&info).unwrap();
+                Response { success: true, result: Some(result), error: None }
+            }
+            Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
+        }
+    }
+
+    async fn handle_backup_purge_old(&self, num_backups_to_keep: Option<usize>) -> Response {
+        match self.backup_manager.purge_old_backups(num_backups_to_keep.unwrap_or(0)) {
+            Ok(_) => Response { success: true, result: None, error: None },
+            Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
+        }
+    }
+
+    async fn handle_backup_restore(&self, backup_id: Option<u32>, restore_path: Option<String>) -> Response {
         match (backup_id, restore_path) {
             (Some(backup_id), Some(restore_path)) => {
-                let opts = RestoreOptions::default();
-                match be.restore_from_backup(&restore_path, &restore_path, &opts, backup_id) {
+                match self.backup_manager.restore_from_backup(backup_id, restore_path) {
                     Ok(_) => Response { success: true, result: None, error: None },
                     Err(e) => Response { success: false, result: None, error: Some(e.to_string()) },
                 }
             }
             _ => Response { success: false, result: None, error: Some("Missing backup ID or restore path".to_string()) }
         }
-    } else {
-        Response { success: false, result: None, error: Some("Backup engine not initialized".to_string()) }
     }
-}
 
-async fn handle_write_batch_start(write_batch: &mut WriteBatchInstance) -> Response {
-    let mut batch = write_batch.lock().unwrap();
-    *batch = Some(RocksDBWriteBatch::new("path_to_your_db".to_string(), None).unwrap());
-    Response { success: true, result: None, error: None }
-}
-
-async fn handle_write_batch_put(write_batch: &mut WriteBatchInstance, key: Option<String>, value: Option<String>, cf_name: Option<String>) -> Response {
-    match (key, value) {
-        (Some(key), Some(value)) => {
-            let batch = write_batch.lock().unwrap();
-            if let Some(ref wb) = *batch {
-                match wb.put(key, value, cf_name) {
+    async fn handle_write_batch_put(&self, key: Option<String>, value: Option<String>, cf_name: Option<String>) -> Response {
+        match (key, value) {
+            (Some(key), Some(value)) => {
+                match self.db_manager.write_batch_put(key, value, cf_name) {
                     Ok(_) => Response { success: true, result: None, error: None },
                     Err(e) => Response { success: false, result: None, error: Some(e) },
                 }
-            } else {
-                Response { success: false, result: None, error: Some("WriteBatch not initialized".to_string()) }
             }
+            _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
         }
-        _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
     }
-}
 
-async fn handle_write_batch_merge(write_batch: &mut WriteBatchInstance, key: Option<String>, value: Option<String>, cf_name: Option<String>) -> Response {
-    match (key, value) {
-        (Some(key), Some(value)) => {
-            let batch = write_batch.lock().unwrap();
-            if let Some(ref wb) = *batch {
-                match wb.merge(key, value, cf_name) {
+    async fn handle_write_batch_merge(&self, key: Option<String>, value: Option<String>, cf_name: Option<String>) -> Response {
+        match (key, value) {
+            (Some(key), Some(value)) => {
+                match self.db_manager.write_batch_merge(key, value, cf_name) {
                     Ok(_) => Response { success: true, result: None, error: None },
                     Err(e) => Response { success: false, result: None, error: Some(e) },
                 }
-            } else {
-                Response { success: false, result: None, error: Some("WriteBatch not initialized".to_string()) }
             }
+            _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
         }
-        _ => Response { success: false, result: None, error: Some("Missing key or value".to_string()) }
     }
-}
 
-async fn handle_write_batch_delete(write_batch: &mut WriteBatchInstance, key: Option<String>, cf_name: Option<String>) -> Response {
-    match key {
-        Some(key) => {
-            let batch = write_batch.lock().unwrap();
-            if let Some(ref wb) = *batch {
-                match wb.delete(key, cf_name) {
+    async fn handle_write_batch_delete(&self, key: Option<String>, cf_name: Option<String>) -> Response {
+        match key {
+            Some(key) => {
+                match self.db_manager.write_batch_delete(key, cf_name) {
                     Ok(_) => Response { success: true, result: None, error: None },
                     Err(e) => Response { success: false, result: None, error: Some(e) },
                 }
-            } else {
-                Response { success: false, result: None, error: Some("WriteBatch not initialized".to_string()) }
             }
+            None => Response { success: false, result: None, error: Some("Missing key".to_string()) }
         }
-        None => Response { success: false, result: None, error: Some("Missing key".to_string()) }
     }
-}
 
-async fn handle_write_batch_write(write_batch: &mut WriteBatchInstance) -> Response {
-    let batch = write_batch.lock().unwrap();
-    if let Some(ref wb) = *batch {
-        match wb.write() {
+    async fn handle_write_batch_write(&self) -> Response {
+        match self.db_manager.write_batch_write() {
             Ok(_) => Response { success: true, result: None, error: None },
             Err(e) => Response { success: false, result: None, error: Some(e) },
         }
-    } else {
-        Response { success: false, result: None, error: Some("WriteBatch not initialized".to_string()) }
     }
-}
 
-async fn handle_write_batch_clear(write_batch: &mut WriteBatchInstance) -> Response {
-    let batch = write_batch.lock().unwrap();
-    if let Some(ref wb) = *batch {
-        match wb.clear() {
+    async fn handle_write_batch_clear(&self) -> Response {
+        match self.db_manager.write_batch_clear() {
             Ok(_) => Response { success: true, result: None, error: None },
             Err(e) => Response { success: false, result: None, error: Some(e) },
         }
-    } else {
-        Response { success: false, result: None, error: Some("WriteBatch not initialized".to_string()) }
+    }
+
+    async fn handle_write_batch_destroy(&self) -> Response {
+        match self.db_manager.write_batch_destroy() {
+            Ok(_) => Response { success: true, result: None, error: None },
+            Err(_) => Response { success: false, result: None, error: Some("WriteBatch not initialized".to_string()) },
+        }
+    }
+
+    async fn handle_seek_to_first(&self) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        let mut iter = db.iterator(rust_rocksdb::IteratorMode::Start);
+        if let Some(Ok((key, _))) = iter.next() {
+            Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
+        } else {
+            Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
+        }
+    }
+
+    async fn handle_seek_to_last(&self) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        let mut iter = db.iterator(rust_rocksdb::IteratorMode::End);
+        if let Some(Ok((key, _))) = iter.next() {
+            Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
+        } else {
+            Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
+        }
+    }
+
+    async fn handle_seek(&self, key: String) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), rust_rocksdb::Direction::Forward));
+        if let Some(Ok((key, _))) = iter.next() {
+            Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
+        } else {
+            Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
+        }
+    }
+
+    async fn handle_seek_for_prev(&self, key: String) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), rust_rocksdb::Direction::Reverse));
+        if let Some(Ok((key, _))) = iter.next() {
+            Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
+        } else {
+            Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
+        }
+    }
+
+    async fn handle_valid(&self) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        let mut iter = db.iterator(rust_rocksdb::IteratorMode::Start);
+        let valid = iter.next().is_some();
+        Response { success: true, result: Some(valid.to_string()), error: None }
+    }
+
+    async fn handle_next(&self) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        let mut iter = db.iterator(rust_rocksdb::IteratorMode::Start);
+        iter.next();
+        if let Some(Ok((key, value))) = iter.next() {
+            Response { success: true, result: Some(format!("{}:{}", String::from_utf8(key.to_vec()).unwrap(), String::from_utf8(value.to_vec()).unwrap())), error: None }
+        } else {
+            Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
+        }
+    }
+
+    async fn handle_prev(&self) -> Response {
+        let db = self.db_manager.db.lock().unwrap();
+        let mut iter = db.iterator(rust_rocksdb::IteratorMode::End);
+        if let Some(Ok((key, value))) = iter.next() {
+            Response { success: true, result: Some(format!("{}:{}", String::from_utf8(key.to_vec()).unwrap(), String::from_utf8(value.to_vec()).unwrap())), error: None }
+        } else {
+            Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
+        }
     }
 }
-
-async fn handle_write_batch_destroy(write_batch: &mut WriteBatchInstance) -> Response {
-    let batch = write_batch.lock().unwrap();
-    if let Some(ref wb) = *batch {
-        let _ = wb.destroy();
-        Response { success: true, result: None, error: None }
-    } else {
-        Response { success: false, result: None, error: Some("WriteBatch not initialized".to_string()) }
-    }
-}
-
-async fn handle_seek_to_first(db: &DbInstance) -> Response {
-    let db = db.lock().unwrap();
-    let mut iter = db.iterator(rust_rocksdb::IteratorMode::Start);
-    if let Some(Ok((key, _))) = iter.next() {
-        Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-    }
-}
-
-async fn handle_seek_to_last(db: &DbInstance) -> Response {
-    let db = db.lock().unwrap();
-    let mut iter = db.iterator(rust_rocksdb::IteratorMode::End);
-    if let Some(Ok((key, _))) = iter.next() {
-        Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-    }
-}
-
-async fn handle_seek(db: &DbInstance, key: String) -> Response {
-    let db = db.lock().unwrap();
-    let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), rust_rocksdb::Direction::Forward));
-    if let Some(Ok((key, _))) = iter.next() {
-        Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-    }
-}
-
-async fn handle_seek_for_prev(db: &DbInstance, key: String) -> Response {
-    let db = db.lock().unwrap();
-    let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), rust_rocksdb::Direction::Reverse));
-    if let Some(Ok((key, _))) = iter.next() {
-        Response { success: true, result: Some(String::from_utf8(key.to_vec()).unwrap()), error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-    }
-}
-
-async fn handle_valid(db: &DbInstance) -> Response {
-    let db = db.lock().unwrap();
-    let mut iter = db.iterator(rust_rocksdb::IteratorMode::Start);
-    let valid = iter.next().is_some();
-    Response { success: true, result: Some(valid.to_string()), error: None }
-}
-
-async fn handle_next(db: &DbInstance) -> Response {
-    let db = db.lock().unwrap();
-    let mut iter = db.iterator(rust_rocksdb::IteratorMode::Start);
-    iter.next();
-    if let Some(Ok((key, value))) = iter.next() {
-        Response { success: true, result: Some(format!("{}:{}", String::from_utf8(key.to_vec()).unwrap(), String::from_utf8(value.to_vec()).unwrap())), error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-    }
-}
-
-async fn handle_prev(db: &DbInstance) -> Response {
-    let db = db.lock().unwrap();
-    let mut iter = db.iterator(rust_rocksdb::IteratorMode::End);
-    if let Some(Ok((key, value))) = iter.next() {
-        Response { success: true, result: Some(format!("{}:{}", String::from_utf8(key.to_vec()).unwrap(), String::from_utf8(value.to_vec()).unwrap())), error: None }
-    } else {
-        Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-    }
-}
-
 
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: {} <db_path> <port>", args[0]);
+        eprintln!("Usage: {} <host> <db_path> <port> [ttl]", args[0]);
         return;
     }
-    let path = &args[1];
-    let port = &args[2];
+    let db_path = &args[1];
+    let host = &args[2];
+    let port = &args[3];
+    let ttl = if args.len() == 5 {
+        Some(args[4].parse::<u64>().expect("Invalid TTL value"))
+    } else {
+        None
+    };
 
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("{}:{}", host, port);
 
-    let mut opts = Options::default();
-    opts.create_if_missing(true);
-    opts.set_merge_operator_associative("json_merge", json_merge);
-
-    let cf_names = DB::list_cf(&opts, path).unwrap_or(vec!["default".to_string()]);
-    let cf_descriptors: Vec<ColumnFamilyDescriptor> = cf_names
-        .iter()
-        .map(|name| {
-            let mut cf_opts = Options::default();
-            cf_opts.set_merge_operator_associative("json_merge", json_merge);
-            ColumnFamilyDescriptor::new(name, cf_opts)
-        })
-        .collect();
-
-    let db = DBWithThreadMode::open_cf_descriptors(&opts, path, cf_descriptors).unwrap();
-    let db = Arc::new(Mutex::new(db));
-
-    let txn_db: Arc<Mutex<Option<RocksDBTransaction>>> = Arc::new(Mutex::new(None));
-
-    let backup_engine_opts = BackupEngineOptions::new(path).unwrap();
-    let env = rust_rocksdb::Env::new().unwrap();
-    let backup_engine = BackupEngine::open(&backup_engine_opts, &env).unwrap();
-    let backup_engine = Arc::new(Mutex::new(Some(backup_engine)));
-    let write_batch: Arc<Mutex<Option<RocksDBWriteBatch>>> = Arc::new(Mutex::new(None));
+    let server = RocksDBServer::new(db_path.clone(), db_path.clone(), ttl).unwrap();
 
     let listener = TcpListener::bind(&addr).await.unwrap();
     println!("Server listening on {}", addr);
 
     while let Ok((socket, _)) = listener.accept().await {
-        let db = Arc::clone(&db);
-        let txn_db = Arc::clone(&txn_db);
-        let backup_engine = Arc::clone(&backup_engine);
-        let write_batch = Arc::clone(&write_batch);
+        let server = server.clone();
         let socket = Framed::new(socket, LengthDelimitedCodec::new());
-        tokio::spawn(handle_client(db, txn_db, backup_engine, write_batch, socket));
+        tokio::spawn(async move {
+            server.handle_client(socket).await;
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::net::TcpStream;
+    use tokio_util::codec::{Framed, LengthDelimitedCodec};
+    use bytes::BytesMut;
+    use futures::SinkExt;
+    use log::info;
+    use crate::backup_manager::{BackupInfo};
+
+    async fn send_request(socket: &mut Framed<TcpStream, LengthDelimitedCodec>, request: Request) -> Response {
+        let request_bytes = serde_json::to_vec(&request).unwrap();
+        socket.send(BytesMut::from(&request_bytes[..]).into()).await.unwrap();
+        let response_bytes = socket.next().await.unwrap().unwrap();
+        serde_json::from_slice(&response_bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_put_get() {
+        let db_path = ".temp/test_db2";
+        let backup_path = ".temp/test_backup";
+        let server = RocksDBServer::new(db_path.to_string(), backup_path.to_string(), None).unwrap();
+        let addr = "127.0.0.1:12345";
+        let listener = TcpListener::bind(&addr).await.unwrap();
+        let server_clone = server.clone();
+
+        tokio::spawn(async move {
+            while let Ok((socket, _)) = listener.accept().await {
+                let server = server_clone.clone();
+                let socket = Framed::new(socket, LengthDelimitedCodec::new());
+                tokio::spawn(async move {
+                    server.handle_client(socket).await;
+                });
+            }
+        });
+
+        let mut socket = Framed::new(TcpStream::connect(&addr).await.unwrap(), LengthDelimitedCodec::new());
+
+        let put_request = Request {
+            action: "put".to_string(),
+            key: Some("test_key".to_string()),
+            value: Some("test_value".to_string()),
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let put_response = send_request(&mut socket, put_request).await;
+        assert!(put_response.success);
+
+        let get_request = Request {
+            action: "get".to_string(),
+            key: Some("test_key".to_string()),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let get_response = send_request(&mut socket, get_request).await;
+        assert!(get_response.success);
+        assert_eq!(get_response.result, Some("test_value".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_delete() {
+        let db_path = ".temp/test_db1";
+        let backup_path = ".temp/test_backup";
+        let server = RocksDBServer::new(db_path.to_string(), backup_path.to_string(), None).unwrap();
+        let addr = "127.0.0.1:12346";
+        let listener = TcpListener::bind(&addr).await.unwrap();
+        let server_clone = server.clone();
+
+        tokio::spawn(async move {
+            while let Ok((socket, _)) = listener.accept().await {
+                let server = server_clone.clone();
+                let socket = Framed::new(socket, LengthDelimitedCodec::new());
+                tokio::spawn(async move {
+                    server.handle_client(socket).await;
+                });
+            }
+        });
+
+        let mut socket = Framed::new(TcpStream::connect(&addr).await.unwrap(), LengthDelimitedCodec::new());
+
+        let put_request = Request {
+            action: "put".to_string(),
+            key: Some("test_key".to_string()),
+            value: Some("test_value".to_string()),
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        send_request(&mut socket, put_request).await;
+
+        let delete_request = Request {
+            action: "delete".to_string(),
+            key: Some("test_key".to_string()),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let delete_response = send_request(&mut socket, delete_request).await;
+        assert!(delete_response.success);
+
+        let get_request = Request {
+            action: "get".to_string(),
+            key: Some("test_key".to_string()),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let get_response = send_request(&mut socket, get_request).await;
+        assert!(!get_response.success);
+    }
+
+    #[tokio::test]
+    async fn test_backup_restore() {
+        let db_path = ".temp/test_db3";
+        let backup_path = ".temp/test_backup";
+        let server = RocksDBServer::new(db_path.to_string(), backup_path.to_string(), None).unwrap();
+        let addr = "127.0.0.1:12345";
+        let listener = TcpListener::bind(&addr).await.unwrap();
+        let server_clone = server.clone();
+
+        tokio::spawn(async move {
+            while let Ok((socket, _)) = listener.accept().await {
+                let server = server_clone.clone();
+                let socket = Framed::new(socket, LengthDelimitedCodec::new());
+                tokio::spawn(async move {
+                    server.handle_client(socket).await;
+                });
+            }
+        });
+
+        let mut socket = Framed::new(TcpStream::connect(&addr).await.unwrap(), LengthDelimitedCodec::new());
+
+        let put_request = Request {
+            action: "put".to_string(),
+            key: Some("test_key".to_string()),
+            value: Some("test_value".to_string()),
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        send_request(&mut socket, put_request).await;
+
+        let backup_request = Request {
+            action: "backup_create".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let backup_response = send_request(&mut socket, backup_request).await;
+        assert!(backup_response.success);
+
+        let delete_request = Request {
+            action: "delete".to_string(),
+            key: Some("test_key".to_string()),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        send_request(&mut socket, delete_request).await;
+
+        let get_request = Request {
+            action: "get".to_string(),
+            key: Some("test_key".to_string()),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let get_response = send_request(&mut socket, get_request).await;
+        assert!(!get_response.success);
+
+        let backup_info_request = Request {
+            action: "backup_info".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let backup_info_response = send_request(&mut socket, backup_info_request).await;
+        assert!(backup_info_response.success);
+        let backup_info: Vec<BackupInfo> = serde_json::from_str(&backup_info_response.result.unwrap()).unwrap();
+        assert!(!backup_info.is_empty());
+
+        let restore_request = Request {
+            action: "backup_restore".to_string(),
+            key: None,
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: Some(backup_info[0].id),
+            restore_path: Some(db_path.to_string()),
+        };
+        let restore_response = send_request(&mut socket, restore_request).await;
+        assert!(restore_response.success);
+
+        let get_request_after_restore = Request {
+            action: "get".to_string(),
+            key: Some("test_key".to_string()),
+            value: None,
+            cf_name: None,
+            options: None,
+            backup_path: None,
+            num_backups_to_keep: None,
+            backup_id: None,
+            restore_path: None,
+        };
+        let get_response_after_restore = send_request(&mut socket, get_request_after_restore).await;
+        info!("{:?}",get_response_after_restore);
+        assert!(get_response_after_restore.success);
+        assert_eq!(get_response_after_restore.result, Some("test_value".to_string()));
     }
 }

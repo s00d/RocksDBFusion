@@ -1088,6 +1088,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "ext-php-rs",
+ "futures",
  "serde",
  "serde_json",
  "tokio",
@@ -1101,6 +1102,7 @@ dependencies = [
  "bytes",
  "futures",
  "json-patch",
+ "log",
  "rust-rocksdb",
  "serde",
  "serde_json",
