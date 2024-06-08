@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::db_manager::RocksDBManager;
 
@@ -14,8 +13,16 @@ pub struct Request {
     pub default: Option<String>,
     pub cf_name: Option<String>,
     pub options: Option<HashMap<String, String>>,
-    pub iterator_id: Option<usize>,
     pub token: Option<String>
+}
+
+impl Request {
+    fn parse_option<T: std::str::FromStr>(&self, key: &str) -> Option<T> {
+        self.options
+            .as_ref()
+            .and_then(|opts| opts.get(key))
+            .and_then(|value| value.parse::<T>().ok())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,21 +35,15 @@ pub struct Response {
 #[derive(Clone)]
 pub struct RocksDBServer {
     db_manager: Arc<RocksDBManager>,
-    iterators: Arc<Mutex<HashMap<usize, (Vec<u8>, rust_rocksdb::Direction)>>>,
-    iterator_id_counter: Arc<AtomicUsize>,
     auth_token: Option<String>,  // Добавлено поле для токена
 }
 
 impl RocksDBServer {
     pub fn new(db_path: String, ttl_secs: Option<u64>, auth_token: Option<String>) -> Result<Self, String> {
         let db_manager = Arc::new(RocksDBManager::new(&*db_path.clone(), ttl_secs.clone())?);
-        let iterators = Arc::new(Mutex::new(HashMap::new()));
-        let iterator_id_counter = Arc::new(AtomicUsize::new(0));
 
         Ok(RocksDBServer {
             db_manager,
-            iterators,
-            iterator_id_counter,
             auth_token,
         })
     }
@@ -91,38 +92,50 @@ impl RocksDBServer {
     }
 
     async fn handle_request(&self, req: Request) -> Response {
-        if let Some(ref auth_token) = self.auth_token {
-            if req.token.as_deref() != Some(auth_token) {
-                return Response {
-                    success: false,
-                    result: None,
-                    error: Some("Unauthorized".to_string()),
-                };
-            }
+        if !self.is_authorized(&req) {
+            return Response {
+                success: false,
+                result: None,
+                error: Some("Unauthorized".to_string()),
+            };
         }
+        let key = req.key.clone();
+        let value = req.value.clone();
+        let cf_name = req.cf_name.clone();
         match req.action.as_str() {
-            "put" => self.handle_put(req.key, req.value, req.cf_name).await,
-            "get" => self.handle_get(req.key, req.cf_name, req.default).await,
-            "delete" => self.handle_delete(req.key, req.cf_name).await,
-            "merge" => self.handle_merge(req.key, req.value, req.cf_name).await,
-            "keys" => self.handle_get_keys(req.options).await,
-            "list_column_families" => self.handle_list_column_families(req.value).await,
-            "create_column_family" => self.handle_create_column_family(req.value).await,
-            "drop_column_family" => self.handle_drop_column_family(req.value).await,
-            "compact_range" => self.handle_compact_range(req.key, req.value, req.cf_name).await,
-            "write_batch_put" => self.handle_write_batch_put(req.key, req.value, req.cf_name).await,
-            "write_batch_merge" => self.handle_write_batch_merge(req.key, req.value, req.cf_name).await,
-            "write_batch_delete" => self.handle_write_batch_delete(req.key, req.cf_name).await,
+            "put" => self.handle_put(key, value, cf_name).await,
+            "get" => self.handle_get(key, cf_name, req.default).await,
+            "delete" => self.handle_delete(key, cf_name).await,
+            "merge" => self.handle_merge(key, value, cf_name).await,
+            "keys" => self.handle_get_keys(&req).await,
+            "list_column_families" => self.handle_list_column_families(value).await,
+            "create_column_family" => self.handle_create_column_family(value).await,
+            "drop_column_family" => self.handle_drop_column_family(value).await,
+            "compact_range" => self.handle_compact_range(key, value, cf_name).await,
+            "write_batch_put" => self.handle_write_batch_put(key, value, cf_name).await,
+            "write_batch_merge" => self.handle_write_batch_merge(key, value, cf_name).await,
+            "write_batch_delete" => self.handle_write_batch_delete(key, cf_name).await,
             "write_batch_write" => self.handle_write_batch_write().await,
             "write_batch_clear" => self.handle_write_batch_clear().await,
             "write_batch_destroy" => self.handle_write_batch_destroy().await,
             "create_iterator" => self.handle_create_iterator().await,
-            "destroy_iterator" => self.handle_destroy_iterator(req.iterator_id.unwrap_or(0)).await,
-            "iterator_seek" => self.handle_iterator_seek(req.iterator_id.unwrap_or(0), req.key.unwrap_or_default(), rust_rocksdb::Direction::Forward).await,
-            "iterator_seek_for_prev" => self.handle_iterator_seek(req.iterator_id.unwrap_or(0), req.key.unwrap_or_default(), rust_rocksdb::Direction::Reverse).await,
-            "iterator_next" => self.handle_iterator_next(req.iterator_id.unwrap_or(0)).await,
-            "iterator_prev" => self.handle_iterator_prev(req.iterator_id.unwrap_or(0)).await,
+            "destroy_iterator" => self.handle_destroy_iterator(&req).await,
+            "iterator_seek" => self.handle_iterator_seek(&req, key.unwrap_or_default(), rust_rocksdb::Direction::Forward).await,
+            "iterator_seek_for_prev" => self.handle_iterator_seek(&req, key.unwrap_or_default(), rust_rocksdb::Direction::Reverse).await,
+            "iterator_next" => self.handle_iterator_next(&req).await,
+            "iterator_prev" => self.handle_iterator_prev(&req).await,
+            "backup" => self.handle_backup().await,
+            "restore_latest" => self.handle_restore_latest().await,
+            "restore" => self.handle_restore_request(&req).await,
+            "get_backup_info" => self.handle_get_backup_info().await,
             _ => Response { success: false, result: None, error: Some("Unknown action".to_string()) },
+        }
+    }
+
+    fn is_authorized(&self, req: &Request) -> bool {
+        match &self.auth_token {
+            Some(auth_token) => req.token.as_deref() == Some(auth_token),
+            None => true,
         }
     }
 
@@ -186,24 +199,17 @@ impl RocksDBServer {
         }
     }
 
-    async fn handle_get_keys(&self, options: Option<HashMap<String, String>>) -> Response {
-        let start = options
-            .as_ref()
-            .and_then(|opts| opts.get("start").and_then(|s| s.parse::<usize>().ok()))
-            .unwrap_or(0);
-        let limit = options
-            .as_ref()
-            .and_then(|opts| opts.get("limit").and_then(|l| l.parse::<usize>().ok()))
-            .unwrap_or(20);
-        let query = options.as_ref().and_then(|opts| opts.get("query").cloned());
+    async fn handle_get_keys(&self, req: &Request) -> Response {
+        let start = req.parse_option::<usize>("start").unwrap_or(0);
+        let limit = req.parse_option::<usize>("limit").unwrap_or(20);
+        let query = req.options.as_ref().and_then(|opts| opts.get("query").cloned());
 
-        match self.db_manager.get_keys(start, limit, query) {
-            Ok(keys) => {
+        self.db_manager.get_keys(start, limit, query)
+            .map(|keys| {
                 let result = serde_json::to_string(&keys).unwrap();
                 Response { success: true, result: Some(result), error: None }
-            }
-            Err(e) => Response { success: false, result: None, error: Some(e) },
-        }
+            })
+            .unwrap_or_else(|e| Response { success: false, result: None, error: Some(e) })
     }
 
     async fn handle_list_column_families(&self, path: Option<String>) -> Response {
@@ -314,84 +320,71 @@ impl RocksDBServer {
     }
 
     async fn handle_create_iterator(&self) -> Response {
-        let mut iterators = self.iterators.lock().unwrap();
-        let id = self.iterator_id_counter.fetch_add(1, Ordering::SeqCst);
-        iterators.insert(id, (vec![], rust_rocksdb::Direction::Forward));
-        Response { success: true, result: Some(id.to_string()), error: None }
-    }
-
-    async fn handle_destroy_iterator(&self, iterator_id: usize) -> Response {
-        let mut iterators = self.iterators.lock().unwrap();
-        if iterators.remove(&iterator_id).is_some() {
-            Response { success: true, result: None, error: None }
-        } else {
-            Response { success: false, result: None, error: Some("Iterator ID not found".to_string()) }
+        Response {
+            success: true,
+            result: Some(self.db_manager.create_iterator().to_string()),
+            error: None,
         }
     }
 
-    async fn handle_iterator_seek(&self, iterator_id: usize, key: String, direction: rust_rocksdb::Direction) -> Response {
-        let db = self.db_manager.db.lock().unwrap();
-        if let Some(ref db) = *db {
-            let mut iterators = self.iterators.lock().unwrap();
-            if let Some(iterator) = iterators.get_mut(&iterator_id) {
-                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), direction));
-                if let Some(Ok((k, _))) = iter.next() {
-                    iterator.0 = k.to_vec();
-                    iterator.1 = direction;
-                    Response { success: true, result: Some(String::from_utf8(k.to_vec()).unwrap()), error: None }
-                } else {
-                    Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-                }
-            } else {
-                Response { success: false, result: None, error: Some("Iterator ID not found".to_string()) }
-            }
-        } else {
-            Response { success: false, result: None, error: Some("Database is not open".to_string()) }
+    async fn handle_destroy_iterator(&self, req: &Request) -> Response {
+        let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
+        self.db_manager.destroy_iterator(iterator_id)
+            .map(|_| Response { success: true, result: None, error: None })
+            .unwrap_or_else(|e| Response { success: false, result: None, error: Some(e) })
+    }
+
+    async fn handle_iterator_seek(&self, req: &Request, key: String, direction: rust_rocksdb::Direction) -> Response {
+        let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
+        self.db_manager.iterator_seek(iterator_id, key, direction)
+            .map(|result| Response { success: true, result: Some(result), error: None })
+            .unwrap_or_else(|e| Response { success: false, result: None, error: Some(e) })
+    }
+
+    async fn handle_iterator_next(&self, req: &Request) -> Response {
+        let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
+        self.db_manager.iterator_next(iterator_id)
+            .map(|result| Response { success: true, result: Some(result), error: None })
+            .unwrap_or_else(|e| Response { success: false, result: None, error: Some(e) })
+    }
+
+    async fn handle_iterator_prev(&self, req: &Request) -> Response {
+        let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
+        self.db_manager.iterator_prev(iterator_id)
+            .map(|result| Response { success: true, result: Some(result), error: None })
+            .unwrap_or_else(|e| Response { success: false, result: None, error: Some(e) })
+    }
+
+    async fn handle_backup(&self) -> Response {
+        match self.db_manager.backup() {
+            Ok(_) => Response { success: true, result: Some("Backup created successfully".to_string()), error: None },
+            Err(e) => Response { success: false, result: None, error: Some(e) },
         }
     }
 
-    async fn handle_iterator_next(&self, iterator_id: usize) -> Response {
-        let db = self.db_manager.db.lock().unwrap();
-        let mut iterators = self.iterators.lock().unwrap();
-        if let Some(ref db) = *db {
-            if let Some(iterator) = iterators.get_mut(&iterator_id) {
-                let (ref mut pos, direction) = *iterator;
-                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(pos, direction));
-                iter.next(); // Move to current position
-                if let Some(Ok((k, v))) = iter.next() {
-                    pos.clone_from_slice(&*k);
-                    Response { success: true, result: Some(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap())), error: None }
-                } else {
-                    Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-                }
-            } else {
-                Response { success: false, result: None, error: Some("Iterator ID not found".to_string()) }
-            }
-        } else {
-            Response { success: false, result: None, error: Some("Database is not open".to_string()) }
+    async fn handle_restore_latest(&self) -> Response {
+        match self.db_manager.restore_latest_backup() {
+            Ok(_) => Response { success: true, result: Some("Database restored from latest backup".to_string()), error: None },
+            Err(e) => Response { success: false, result: None, error: Some(e) },
         }
-
     }
 
-    async fn handle_iterator_prev(&self, iterator_id: usize) -> Response {
-        let db = self.db_manager.db.lock().unwrap();
-        if let Some(ref db) = *db {
-            let mut iterators = self.iterators.lock().unwrap();
-            if let Some(iterator) = iterators.get_mut(&iterator_id) {
-                let (ref mut pos, _direction) = *iterator;
-                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(pos, rust_rocksdb::Direction::Reverse));
-                iter.next(); // Move to current position
-                if let Some(Ok((k, v))) = iter.next() {
-                    pos.clone_from_slice(&*k);
-                    Response { success: true, result: Some(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap())), error: None }
-                } else {
-                    Response { success: false, result: None, error: Some("Iterator is invalid".to_string()) }
-                }
-            } else {
-                Response { success: false, result: None, error: Some("Iterator ID not found".to_string()) }
+    async fn handle_restore_request(&self, req: &Request) -> Response {
+        let backup_id = req.parse_option::<u32>("backup_id").unwrap_or(0);
+        match self.db_manager.restore_backup(backup_id) {
+            Ok(_) => Response { success: true, result: Some(format!("Database restored from backup {}", backup_id)), error: None },
+            Err(e) => Response { success: false, result: None, error: Some(e) },
+        }
+    }
+
+
+    async fn handle_get_backup_info(&self) -> Response {
+        match self.db_manager.get_backup_info() {
+            Ok(info) => {
+                let result = serde_json::to_string(&info).unwrap();
+                Response { success: true, result: Some(result), error: None }
             }
-        } else {
-            Response { success: false, result: None, error: Some("Database is not open".to_string()) }
+            Err(e) => Response { success: false, result: None, error: Some(e) },
         }
     }
 }

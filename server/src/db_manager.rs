@@ -1,10 +1,15 @@
+use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use json_patch::{Patch, PatchOperation};
-use rust_rocksdb::{DBWithThreadMode, SingleThreaded, Options, ColumnFamilyDescriptor, MergeOperands, WriteBatchWithTransaction};
+use rust_rocksdb::{DBWithThreadMode, MultiThreaded, Options, ColumnFamilyDescriptor, MergeOperands, WriteBatchWithTransaction, Env};
+use rust_rocksdb::backup::{BackupEngine, BackupEngineInfo, BackupEngineOptions, RestoreOptions};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value};
 
-pub type DbInstance = Arc<Mutex<Option<DBWithThreadMode<SingleThreaded>>>>;
+pub type DbInstance = Arc<Mutex<Option<DBWithThreadMode<MultiThreaded>>>>;
 
 pub fn json_merge(
     _new_key: &[u8],
@@ -40,10 +45,32 @@ pub fn json_merge(
     }
 }
 
+
+#[derive(Serialize, Deserialize)]
+pub struct BackupInfo {
+    timestamp: i64,
+    backup_id: u32,
+    size: u64,
+    num_files: u32,
+}
+
+impl From<BackupEngineInfo> for BackupInfo {
+    fn from(info: BackupEngineInfo) -> Self {
+        BackupInfo {
+            timestamp: info.timestamp,
+            backup_id: info.backup_id,
+            size: info.size,
+            num_files: info.num_files,
+        }
+    }
+}
+
 pub struct RocksDBManager {
     pub db: DbInstance,
     pub db_path: String,
     write_batch: Mutex<Option<WriteBatchWithTransaction<false>>>,
+    iterators: Mutex<HashMap<usize, (Vec<u8>, rust_rocksdb::Direction)>>,
+    iterator_id_counter: AtomicUsize,
 }
 
 impl RocksDBManager {
@@ -52,7 +79,7 @@ impl RocksDBManager {
         opts.create_if_missing(true);
         opts.set_merge_operator_associative("json_merge", json_merge);
 
-        let cf_names = DBWithThreadMode::<SingleThreaded>::list_cf(&opts, db_path).unwrap_or(vec!["default".to_string()]);
+        let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, db_path).unwrap_or(vec!["default".to_string()]);
         let cf_descriptors: Vec<ColumnFamilyDescriptor> = cf_names
             .iter()
             .map(|name| {
@@ -65,19 +92,24 @@ impl RocksDBManager {
         let db = match ttl_secs {
             Some(ttl) => {
                 let duration = Duration::from_secs(ttl);
-                DBWithThreadMode::<SingleThreaded>::open_cf_descriptors_with_ttl(&opts, db_path, cf_descriptors, duration).map_err(|e| e.to_string())?
+                DBWithThreadMode::<MultiThreaded>::open_cf_descriptors_with_ttl(&opts, db_path, cf_descriptors, duration).map_err(|e| e.to_string())?
             },
             None => {
-                DBWithThreadMode::<SingleThreaded>::open_cf_descriptors(&opts, db_path, cf_descriptors).map_err(|e| e.to_string())?
+                DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(&opts, db_path, cf_descriptors).map_err(|e| e.to_string())?
             }
         };
 
         let db = Arc::new(Mutex::new(Some(db)));
 
+        let iterators = Mutex::new(HashMap::new());
+        let iterator_id_counter = AtomicUsize::new(0);
+
         Ok(RocksDBManager {
             db,
             db_path: db_path.to_string(),
             write_batch: Mutex::new(Some(WriteBatchWithTransaction::default())),
+            iterators,
+            iterator_id_counter,
         })
     }
 
@@ -195,7 +227,7 @@ impl RocksDBManager {
         opts.create_if_missing(true);
         opts.set_merge_operator_associative("json_merge", json_merge);
 
-        let cf_names = DBWithThreadMode::<SingleThreaded>::list_cf(&opts, &self.db_path).unwrap_or(vec!["default".to_string()]);
+        let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, &self.db_path).unwrap_or(vec!["default".to_string()]);
         let cf_descriptors: Vec<ColumnFamilyDescriptor> = cf_names
             .iter()
             .map(|name| {
@@ -205,7 +237,7 @@ impl RocksDBManager {
             })
             .collect();
 
-        let new_db = DBWithThreadMode::<SingleThreaded>::open_cf_descriptors(&opts, &self.db_path, cf_descriptors)
+        let new_db = DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(&opts, &self.db_path, cf_descriptors)
             .map_err(|e| e.to_string())?;
         let mut db_lock = self.db.lock().unwrap();
         *db_lock = Some(new_db);
@@ -222,7 +254,7 @@ impl RocksDBManager {
 
     pub fn list_column_families(&self, path: String) -> Result<Vec<String>, String> {
         let opts = Options::default();
-        DBWithThreadMode::<SingleThreaded>::list_cf(&opts, path).map_err(|e| e.to_string())
+        DBWithThreadMode::<MultiThreaded>::list_cf(&opts, path).map_err(|e| e.to_string())
     }
 
     pub fn create_column_family(&self, cf_name: String) -> Result<(), String> {
@@ -375,6 +407,132 @@ impl RocksDBManager {
         let mut batch = self.write_batch.lock().unwrap();
         *batch = None;
         Ok(())
+    }
+
+    pub fn create_iterator(&self) -> usize {
+        let mut iterators = self.iterators.lock().unwrap();
+        let id = self.iterator_id_counter.fetch_add(1, Ordering::SeqCst);
+        iterators.insert(id, (vec![], rust_rocksdb::Direction::Forward));
+        id
+    }
+
+    pub fn destroy_iterator(&self, iterator_id: usize) -> Result<(), String> {
+        let mut iterators = self.iterators.lock().unwrap();
+        if iterators.remove(&iterator_id).is_some() {
+            Ok(())
+        } else {
+            Err("Iterator ID not found".to_string())
+        }
+    }
+
+    pub fn iterator_seek(&self, iterator_id: usize, key: String, direction: rust_rocksdb::Direction) -> Result<String, String> {
+        let db = self.db.lock().unwrap();
+        if let Some(ref db) = *db {
+            let mut iterators = self.iterators.lock().unwrap();
+            if let Some(iterator) = iterators.get_mut(&iterator_id) {
+                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), direction));
+                if let Some(Ok((k, _))) = iter.next() {
+                    iterator.0 = k.to_vec();
+                    iterator.1 = direction;
+                    Ok(String::from_utf8(k.to_vec()).unwrap())
+                } else {
+                    Err("Iterator is invalid".to_string())
+                }
+            } else {
+                Err("Iterator ID not found".to_string())
+            }
+        } else {
+            Err("Database is not open".to_string())
+        }
+    }
+
+    pub fn iterator_next(&self, iterator_id: usize) -> Result<String, String> {
+        let db = self.db.lock().unwrap();
+        let mut iterators = self.iterators.lock().unwrap();
+        if let Some(ref db) = *db {
+            if let Some(iterator) = iterators.get_mut(&iterator_id) {
+                let (ref mut pos, direction) = *iterator;
+                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(pos, direction));
+                iter.next(); // Move to current position
+                if let Some(Ok((k, v))) = iter.next() {
+                    pos.clone_from_slice(&*k);
+                    Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()))
+                } else {
+                    Err("Iterator is invalid".to_string())
+                }
+            } else {
+                Err("Iterator ID not found".to_string())
+            }
+        } else {
+            Err("Database is not open".to_string())
+        }
+    }
+
+    pub fn iterator_prev(&self, iterator_id: usize) -> Result<String, String> {
+        let db = self.db.lock().unwrap();
+        if let Some(ref db) = *db {
+            let mut iterators = self.iterators.lock().unwrap();
+            if let Some(iterator) = iterators.get_mut(&iterator_id) {
+                let (ref mut pos, _direction) = *iterator;
+                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(pos, rust_rocksdb::Direction::Reverse));
+                iter.next(); // Move to current position
+                if let Some(Ok((k, v))) = iter.next() {
+                    pos.clone_from_slice(&*k);
+                    Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()))
+                } else {
+                    Err("Iterator is invalid".to_string())
+                }
+            } else {
+                Err("Iterator ID not found".to_string())
+            }
+        } else {
+            Err("Database is not open".to_string())
+        }
+    }
+
+    pub fn backup(&self) -> Result<(), String> {
+        let backup_path = format!("{}/backup", self.db_path);
+        let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
+        let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+
+        let db = self.db.lock().unwrap();
+        if let Some(ref db) = *db {
+            backup_engine.create_new_backup(db).map_err(|e| e.to_string())
+        } else {
+            Err("Database is not open".to_string())
+        }
+    }
+
+    pub fn restore_latest_backup(&self) -> Result<(), String> {
+        let backup_path = format!("{}/backup", self.db_path);
+        let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
+        let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+
+        let restore_opts = RestoreOptions::default();
+        backup_engine.restore_from_latest_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts).map_err(|e| e.to_string())?;
+        self.reload()?;
+        Ok(())
+    }
+
+    pub fn restore_backup(&self, backup_id: u32) -> Result<(), String> {
+        let backup_path = format!("{}/backup", self.db_path);
+        let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
+        let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+
+        let restore_opts = RestoreOptions::default();
+        backup_engine.restore_from_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts, backup_id).map_err(|e| e.to_string())?;
+        self.reload()?;
+        Ok(())
+    }
+
+    pub fn get_backup_info(&self) -> Result<Vec<BackupInfo>, String> {
+        let backup_path = format!("{}/backup", self.db_path);
+        let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
+        let backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+
+        let info = backup_engine.get_backup_info();
+        let backup_info: Vec<BackupInfo> = info.into_iter().map(BackupInfo::from).collect();
+        Ok(backup_info)
     }
 }
 

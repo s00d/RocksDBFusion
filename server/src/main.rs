@@ -38,7 +38,7 @@ async fn main() {
     let token = opt.token;
 
     let addr = format!("{}:{}", host, port);
-    // let backup_path = format!("{}/backup", db_path.clone());
+
 
     let server = RocksDBServer::new(db_path.clone(), ttl, token).unwrap();
 
