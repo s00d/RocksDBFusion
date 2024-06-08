@@ -1,0 +1,21 @@
+{
+  "name": "s00d/rocksdb-client-php",
+  "description": "A PHP client for interacting with RocksDB server",
+  "type": "library",
+  "require": {
+    "php": "^7.4 || ^8.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "RocksDBClient\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "RocksDBClient\\Tests\\": "tests/"
+    }
+  }
+}

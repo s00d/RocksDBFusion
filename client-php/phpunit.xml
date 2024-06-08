@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php"
+         colors="true"
+         stopOnFailure="false"
+         stopOnError="false">
+    <php>
+        <ini name="xdebug.remote_enable" value="0"/>
+        <ini name="xdebug.profiler_enable" value="0"/>
+    </php>
+    <testsuites>
+        <testsuite name="Application Test Suite">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
