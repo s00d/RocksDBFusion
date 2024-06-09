@@ -1,13 +1,13 @@
-use tokio::net::TcpStream;
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use serde::{Deserialize, Serialize};
 use bytes::Bytes;
-use std::collections::HashMap;
-use std::sync::{Arc};
-use tokio::sync::Mutex;
 use ext_php_rs::prelude::PhpResult;
-use futures::StreamExt;
 use futures::SinkExt;
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::net::TcpStream;
+use tokio::sync::Mutex;
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -45,11 +45,15 @@ impl RequestHandler {
         }
     }
 
-    async fn get_connection(&self) -> Result<Arc<Mutex<Framed<TcpStream, LengthDelimitedCodec>>>, String> {
+    async fn get_connection(
+        &self,
+    ) -> Result<Arc<Mutex<Framed<TcpStream, LengthDelimitedCodec>>>, String> {
         let mut conn = self.connection.lock().await;
         if conn.is_none() {
             let addr = format!("{}:{}", self.host, self.port);
-            let stream = TcpStream::connect(&addr).await.map_err(|e| format!("Connection error: {}", e))?;
+            let stream = TcpStream::connect(&addr)
+                .await
+                .map_err(|e| format!("Connection error: {}", e))?;
             let framed = Framed::new(stream, LengthDelimitedCodec::new());
             *conn = Some(framed);
         }
@@ -65,8 +69,11 @@ impl RequestHandler {
         let connection = self.get_connection().await?;
         let mut conn = connection.lock().await;
 
-        let request_bytes = serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
-        conn.send(Bytes::from(request_bytes)).await.map_err(|e| format!("Send error: {}", e))?;
+        let request_bytes =
+            serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
+        conn.send(Bytes::from(request_bytes))
+            .await
+            .map_err(|e| format!("Send error: {}", e))?;
 
         let response_bytes = match conn.next().await {
             Some(Ok(bytes)) => bytes,
@@ -74,7 +81,8 @@ impl RequestHandler {
             None => return Err("Receive error: no response received".to_string()),
         };
 
-        let response: Response = serde_json::from_slice(&response_bytes).map_err(|e| format!("Deserialization error: {}", e))?;
+        let response: Response = serde_json::from_slice(&response_bytes)
+            .map_err(|e| format!("Deserialization error: {}", e))?;
         Ok(response)
     }
 

@@ -1,53 +1,74 @@
-pub mod server;
 pub mod db_manager;
+mod heplers;
+pub mod server;
 
-use std::env;
-use structopt::StructOpt;
-use tokio::net::TcpListener;
-use server::{RocksDBServer};
-use std::path::PathBuf;
+use crate::heplers::{LockFileGuard, LogLevel};
 use env_logger::{Builder, Target};
 use log::{info, LevelFilter};
+use server::RocksDBServer;
+use std::env;
+use std::fs::File;
+use std::path::PathBuf;
+use structopt::StructOpt;
+use tokio::io;
+use tokio::net::TcpListener;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "RocksDB Server")]
+#[structopt(name = "RocksDB Server", about = "A simple RocksDB server.")]
 struct Opt {
-    #[structopt(parse(from_os_str))]
-    db_path: PathBuf,
+    /// Path to the RocksDB database
+    #[structopt(long, short, default_value = "./db_test")]
+    dbpath: PathBuf,
+
+    /// Port to listen on
+    #[structopt(long, short, default_value = "12345")]
     port: u16,
-    #[structopt(default_value = "127.0.0.1")]
+
+    /// Host to bind the server to
+    #[structopt(long, default_value = "127.0.0.1")]
     host: String,
-    #[structopt(long)]
+
+    /// Time-to-live (TTL) for database entries in seconds
+    #[structopt(long, short)]
     ttl: Option<u64>,
+
+    /// Authentication token for server access
     #[structopt(long)]
     token: Option<String>,
+
+    /// Logging level (debug, info, warn, error)
     #[structopt(long, default_value = "info")]
-    log_level: String,
+    log_level: LogLevel,
+
+    /// Path to the lock file
+    #[structopt(long, parse(from_os_str))]
+    lock_file: Option<PathBuf>,
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> io::Result<()> {
     let opt = Opt::from_args();
 
-    let db_path = if opt.db_path.starts_with(".") {
-        env::current_dir().unwrap().join(opt.db_path)
+    let dbpath = if opt.dbpath.starts_with(".") {
+        env::current_dir().unwrap().join(opt.dbpath)
     } else {
-        opt.db_path.clone()
+        opt.dbpath.clone()
     };
-    let db_path = db_path.to_str().unwrap().to_string();
+    let dbpath = dbpath.to_str().unwrap().to_string();
 
     let port = opt.port;
     let host = opt.host;
     let ttl = opt.ttl;
     let token = opt.token;
 
-    let log_level = match opt.log_level.to_lowercase().as_str() {
-        "debug" => LevelFilter::Debug,
-        "info" => LevelFilter::Info,
-        "warn" => LevelFilter::Warn,
-        "error" => LevelFilter::Error,
-        _ => LevelFilter::Info,
+    let _lock_guard = if let Some(lock_file_path) = opt.lock_file {
+        let file = File::create(&lock_file_path)?;
+        Some(LockFileGuard::new(lock_file_path, file)?)
+    } else {
+        None
     };
+
+    let log_level: LevelFilter = opt.log_level.into();
 
     Builder::new()
         .filter(None, log_level)
@@ -56,15 +77,22 @@ async fn main() {
 
     let addr = format!("{}:{}", host, port);
 
-    let server = RocksDBServer::new(db_path.clone(), ttl, token).unwrap();
+    let server = RocksDBServer::new(dbpath.clone(), ttl, token).unwrap();
 
     let listener = TcpListener::bind(&addr).await.unwrap();
     info!("Server listening on {}", addr);
 
-    while let Ok((socket, _)) = listener.accept().await {
-        let server = server.clone();
-        tokio::spawn(async move {
-            server.handle_client(socket).await;
-        });
-    }
+    tokio::spawn(async move {
+        while let Ok((socket, _)) = listener.accept().await {
+            let server = server.clone();
+            tokio::spawn(async move {
+                server.handle_client(socket).await;
+            });
+        }
+    });
+
+    // Wait for shutdown signal
+    tokio::signal::ctrl_c().await?;
+
+    Ok(())
 }

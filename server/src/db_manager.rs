@@ -1,14 +1,17 @@
+use json_patch::{Patch, PatchOperation};
+use log::{debug, error, info};
+use rust_rocksdb::backup::{BackupEngine, BackupEngineInfo, BackupEngineOptions, RestoreOptions};
+use rust_rocksdb::{
+    ColumnFamilyDescriptor, DBWithThreadMode, Env, MergeOperands, MultiThreaded, Options,
+    WriteBatchWithTransaction,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use json_patch::{Patch, PatchOperation};
-use rust_rocksdb::{DBWithThreadMode, MultiThreaded, Options, ColumnFamilyDescriptor, MergeOperands, WriteBatchWithTransaction, Env};
-use rust_rocksdb::backup::{BackupEngine, BackupEngineInfo, BackupEngineOptions, RestoreOptions};
-use serde::{Deserialize, Serialize};
-use serde_json::{Value};
-use log::{info, debug, error};
 
 pub type DbInstance = Arc<Mutex<Option<DBWithThreadMode<MultiThreaded>>>>;
 
@@ -75,13 +78,17 @@ pub struct RocksDBManager {
 
 impl RocksDBManager {
     pub fn new(db_path: &str, ttl_secs: Option<u64>) -> Result<Self, String> {
-        info!("Initializing RocksDBManager with db_path: {}, ttl_secs: {:?}", db_path, ttl_secs);
+        info!(
+            "Initializing RocksDBManager with db_path: {}, ttl_secs: {:?}",
+            db_path, ttl_secs
+        );
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_merge_operator_associative("json_merge", json_merge);
 
-        let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, db_path).unwrap_or(vec!["default".to_string()]);
+        let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, db_path)
+            .unwrap_or(vec!["default".to_string()]);
         let cf_descriptors: Vec<ColumnFamilyDescriptor> = cf_names
             .iter()
             .map(|name| {
@@ -94,11 +101,20 @@ impl RocksDBManager {
         let db = match ttl_secs {
             Some(ttl) => {
                 let duration = Duration::from_secs(ttl);
-                DBWithThreadMode::<MultiThreaded>::open_cf_descriptors_with_ttl(&opts, db_path, cf_descriptors, duration).map_err(|e| e.to_string())?
-            },
-            None => {
-                DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(&opts, db_path, cf_descriptors).map_err(|e| e.to_string())?
+                DBWithThreadMode::<MultiThreaded>::open_cf_descriptors_with_ttl(
+                    &opts,
+                    db_path,
+                    cf_descriptors,
+                    duration,
+                )
+                .map_err(|e| e.to_string())?
             }
+            None => DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
+                &opts,
+                db_path,
+                cf_descriptors,
+            )
+            .map_err(|e| e.to_string())?,
         };
 
         let db = Arc::new(Mutex::new(Some(db)));
@@ -118,15 +134,21 @@ impl RocksDBManager {
     }
 
     pub fn put(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        debug!("Putting key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
+        debug!(
+            "Putting key: {}, value: {}, cf_name: {:?}",
+            key, value, cf_name
+        );
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    db.put_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
+                    db.put_cf(&cf, key.as_bytes(), value.as_bytes())
+                        .map_err(|e| e.to_string())
                 }
-                None => db.put(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
+                None => db
+                    .put(key.as_bytes(), value.as_bytes())
+                    .map_err(|e| e.to_string()),
             };
             debug!("Put result: {:?}", result);
             result
@@ -135,22 +157,34 @@ impl RocksDBManager {
         }
     }
 
-    pub fn get(&self, key: String, cf_name: Option<String>, default: Option<String>) -> Result<Option<String>, String> {
-        debug!("Getting key: {}, cf_name: {:?}, default: {:?}", key, cf_name, default);
+    pub fn get(
+        &self,
+        key: String,
+        cf_name: Option<String>,
+        default: Option<String>,
+    ) -> Result<Option<String>, String> {
+        debug!(
+            "Getting key: {}, cf_name: {:?}, default: {:?}",
+            key, cf_name, default
+        );
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     match db.get_cf(&cf, key.as_bytes()) {
-                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
+                        Ok(Some(value)) => {
+                            Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?))
+                        }
                         Ok(None) => Ok(default), // Если значение не найдено, возвращаем значение по умолчанию
                         Err(e) => Err(e.to_string()),
                     }
                 }
                 None => {
                     match db.get(key.as_bytes()) {
-                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
+                        Ok(Some(value)) => {
+                            Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?))
+                        }
                         Ok(None) => Ok(default), // Если значение не найдено, возвращаем значение по умолчанию
                         Err(e) => Err(e.to_string()),
                     }
@@ -182,18 +216,52 @@ impl RocksDBManager {
     }
 
     pub fn merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        debug!("Merging key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
+        debug!(
+            "Merging key: {}, value: {}, cf_name: {:?}",
+            key, value, cf_name
+        );
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    db.merge_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
+                    db.merge_cf(&cf, key.as_bytes(), value.as_bytes())
+                        .map_err(|e| e.to_string())
                 }
-                None => db.merge(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
+                None => db
+                    .merge(key.as_bytes(), value.as_bytes())
+                    .map_err(|e| e.to_string()),
             };
             debug!("Merge result: {:?}", result);
             result
+        } else {
+            Err("Database is not open".to_string())
+        }
+    }
+
+    pub fn get_property(
+        &self,
+        property: String,
+        cf_name: Option<String>,
+    ) -> Result<Option<String>, String> {
+        debug!("get property with id: {}, cf_name: {:?}", property, cf_name);
+        let db = self.db.lock().unwrap();
+        if let Some(ref db) = *db {
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    match db.property_value_cf(&cf, &property) {
+                        Ok(Some(value)) => Ok(Some(value)),
+                        Ok(None) => Ok(None),
+                        Err(e) => Err(e.to_string().into()),
+                    }
+                }
+                None => match db.property_value(&property) {
+                    Ok(Some(value)) => Ok(Some(value)),
+                    Ok(None) => Ok(None),
+                    Err(e) => Err(e.to_string().into()),
+                },
+            }
         } else {
             Err("Database is not open".to_string())
         }
@@ -231,8 +299,16 @@ impl RocksDBManager {
         }
     }
 
-    pub fn get_keys(&self, start: usize, limit: usize, query: Option<String>) -> Result<Vec<String>, String> {
-        debug!("Get keys with start: {}, limit: {}, query: {:?}", start, limit, query);
+    pub fn get_keys(
+        &self,
+        start: usize,
+        limit: usize,
+        query: Option<String>,
+    ) -> Result<Vec<String>, String> {
+        debug!(
+            "Get keys with start: {}, limit: {}, query: {:?}",
+            start, limit, query
+        );
         let mut keys = self.get_all(query)?;
         keys = keys.into_iter().skip(start).take(limit).collect();
         debug!("Get keys result: {:?}", keys);
@@ -253,7 +329,8 @@ impl RocksDBManager {
         opts.create_if_missing(true);
         opts.set_merge_operator_associative("json_merge", json_merge);
 
-        let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, &self.db_path).unwrap_or(vec!["default".to_string()]);
+        let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, &self.db_path)
+            .unwrap_or(vec!["default".to_string()]);
         let cf_descriptors: Vec<ColumnFamilyDescriptor> = cf_names
             .iter()
             .map(|name| {
@@ -263,8 +340,12 @@ impl RocksDBManager {
             })
             .collect();
 
-        let new_db = DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(&opts, &self.db_path, cf_descriptors)
-            .map_err(|e| e.to_string())?;
+        let new_db = DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
+            &opts,
+            &self.db_path,
+            cf_descriptors,
+        )
+        .map_err(|e| e.to_string())?;
         let mut db_lock = self.db.lock().unwrap();
         *db_lock = Some(new_db);
 
@@ -284,7 +365,8 @@ impl RocksDBManager {
     pub fn list_column_families(&self, path: String) -> Result<Vec<String>, String> {
         debug!("Listing column families for path: {}", path);
         let opts = Options::default();
-        let result = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, path).map_err(|e| e.to_string());
+        let result =
+            DBWithThreadMode::<MultiThreaded>::list_cf(&opts, path).map_err(|e| e.to_string());
         debug!("List column families result: {:?}", result);
         result
     }
@@ -325,8 +407,16 @@ impl RocksDBManager {
         }
     }
 
-    pub fn compact_range(&self, start: Option<String>, end: Option<String>, cf_name: Option<String>) -> Result<(), String> {
-        debug!("Compacting range with start: {:?}, end: {:?}, cf_name: {:?}", start, end, cf_name);
+    pub fn compact_range(
+        &self,
+        start: Option<String>,
+        end: Option<String>,
+        cf_name: Option<String>,
+    ) -> Result<(), String> {
+        debug!(
+            "Compacting range with start: {:?}, end: {:?}, cf_name: {:?}",
+            start, end, cf_name
+        );
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let result = match cf_name {
@@ -347,8 +437,16 @@ impl RocksDBManager {
         }
     }
 
-    pub fn write_batch_put(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        debug!("Write batch put with key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
+    pub fn write_batch_put(
+        &self,
+        key: String,
+        value: String,
+        cf_name: Option<String>,
+    ) -> Result<(), String> {
+        debug!(
+            "Write batch put with key: {}, value: {}, cf_name: {:?}",
+            key, value, cf_name
+        );
         let db = self.db.lock().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
@@ -373,8 +471,16 @@ impl RocksDBManager {
         }
     }
 
-    pub fn write_batch_merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
-        debug!("Write batch merge with key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
+    pub fn write_batch_merge(
+        &self,
+        key: String,
+        value: String,
+        cf_name: Option<String>,
+    ) -> Result<(), String> {
+        debug!(
+            "Write batch merge with key: {}, value: {}, cf_name: {:?}",
+            key, value, cf_name
+        );
         let db = self.db.lock().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
@@ -400,7 +506,10 @@ impl RocksDBManager {
     }
 
     pub fn write_batch_delete(&self, key: String, cf_name: Option<String>) -> Result<(), String> {
-        debug!("Write batch delete with key: {}, cf_name: {:?}", key, cf_name);
+        debug!(
+            "Write batch delete with key: {}, cf_name: {:?}",
+            key, cf_name
+        );
         let db = self.db.lock().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
@@ -431,8 +540,7 @@ impl RocksDBManager {
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
             let result = if let Some(wb) = batch.take() {
-                db.write(wb)
-                    .map_err(|e| e.to_string())?;
+                db.write(wb).map_err(|e| e.to_string())?;
                 *batch = Some(WriteBatchWithTransaction::default());
                 Ok(())
             } else {
@@ -481,20 +589,32 @@ impl RocksDBManager {
         }
     }
 
-    pub fn iterator_seek(&self, iterator_id: usize, key: String, direction: rust_rocksdb::Direction) -> Result<String, String> {
+    pub fn iterator_seek(
+        &self,
+        iterator_id: usize,
+        key: String,
+        direction: rust_rocksdb::Direction,
+    ) -> Result<String, String> {
         match direction {
             rust_rocksdb::Direction::Forward => {
-                debug!("Iterator seek with id: {}, key: {}, direction: Forward", iterator_id, key);
+                debug!(
+                    "Iterator seek with id: {}, key: {}, direction: Forward",
+                    iterator_id, key
+                );
             }
             rust_rocksdb::Direction::Reverse => {
-                debug!("Iterator seek with id: {}, key: {}, direction: Reverse", iterator_id, key);
+                debug!(
+                    "Iterator seek with id: {}, key: {}, direction: Reverse",
+                    iterator_id, key
+                );
             }
         }
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let mut iterators = self.iterators.lock().unwrap();
             if let Some(iterator) = iterators.get_mut(&iterator_id) {
-                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), direction));
+                let mut iter =
+                    db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), direction));
                 if let Some(Ok((k, _))) = iter.next() {
                     iterator.0 = k.to_vec();
                     iterator.1 = direction;
@@ -523,7 +643,11 @@ impl RocksDBManager {
                 iter.next(); // Move to current position
                 if let Some(Ok((k, v))) = iter.next() {
                     pos.clone_from_slice(&*k);
-                    let result = Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()));
+                    let result = Ok(format!(
+                        "{}:{}",
+                        String::from_utf8(k.to_vec()).unwrap(),
+                        String::from_utf8(v.to_vec()).unwrap()
+                    ));
                     debug!("Iterator next result: {:?}", result);
                     result
                 } else {
@@ -544,11 +668,18 @@ impl RocksDBManager {
             let mut iterators = self.iterators.lock().unwrap();
             if let Some(iterator) = iterators.get_mut(&iterator_id) {
                 let (ref mut pos, _direction) = *iterator;
-                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(pos, rust_rocksdb::Direction::Reverse));
+                let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(
+                    pos,
+                    rust_rocksdb::Direction::Reverse,
+                ));
                 iter.next(); // Move to current position
                 if let Some(Ok((k, v))) = iter.next() {
                     pos.clone_from_slice(&*k);
-                    let result = Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()));
+                    let result = Ok(format!(
+                        "{}:{}",
+                        String::from_utf8(k.to_vec()).unwrap(),
+                        String::from_utf8(v.to_vec()).unwrap()
+                    ));
                     debug!("Iterator prev result: {:?}", result);
                     result
                 } else {
@@ -566,11 +697,15 @@ impl RocksDBManager {
         info!("Creating backup");
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
-        let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let mut backup_engine =
+            BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
 
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
-            let result = backup_engine.create_new_backup(db).map_err(|e| e.to_string());
+            let result = backup_engine
+                .create_new_backup(db)
+                .map_err(|e| e.to_string());
             debug!("Backup result: {:?}", result);
             result
         } else {
@@ -582,10 +717,18 @@ impl RocksDBManager {
         info!("Restoring latest backup");
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
-        let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let mut backup_engine =
+            BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
 
         let restore_opts = RestoreOptions::default();
-        let result = backup_engine.restore_from_latest_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts).map_err(|e| e.to_string())?;
+        let result = backup_engine
+            .restore_from_latest_backup(
+                Path::new(&self.db_path),
+                Path::new(&self.db_path),
+                &restore_opts,
+            )
+            .map_err(|e| e.to_string())?;
         self.reload()?;
         debug!("Restore latest backup result: {:?}", result);
         Ok(())
@@ -595,10 +738,19 @@ impl RocksDBManager {
         info!("Restoring backup with id: {}", backup_id);
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
-        let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let mut backup_engine =
+            BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
 
         let restore_opts = RestoreOptions::default();
-        let result = backup_engine.restore_from_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts, backup_id).map_err(|e| e.to_string())?;
+        let result = backup_engine
+            .restore_from_backup(
+                Path::new(&self.db_path),
+                Path::new(&self.db_path),
+                &restore_opts,
+                backup_id,
+            )
+            .map_err(|e| e.to_string())?;
         self.reload()?;
         debug!("Restore backup result: {:?}", result);
         Ok(())
@@ -608,7 +760,9 @@ impl RocksDBManager {
         info!("Getting backup info");
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
-        let backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let backup_engine =
+            BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
 
         let info = backup_engine.get_backup_info();
         let backup_info: Vec<BackupInfo> = info.into_iter().map(BackupInfo::from).collect();
@@ -632,7 +786,9 @@ mod tests {
     #[test]
     fn test_put_and_get() {
         let manager = setup_db(".temp/test_put_and_get");
-        manager.put("key1".to_string(), "value1".to_string(), None).unwrap();
+        manager
+            .put("key1".to_string(), "value1".to_string(), None)
+            .unwrap();
         let result = manager.get("key1".to_string(), None, None).unwrap();
         assert_eq!(result, Some("value1".to_string()));
     }
@@ -640,7 +796,9 @@ mod tests {
     #[test]
     fn test_delete() {
         let manager = setup_db(".temp/test_delete");
-        manager.put("key1".to_string(), "value1".to_string(), None).unwrap();
+        manager
+            .put("key1".to_string(), "value1".to_string(), None)
+            .unwrap();
         manager.delete("key1".to_string(), None).unwrap();
         let result = manager.get("key1".to_string(), None, None).unwrap();
         assert_eq!(result, None);
@@ -649,8 +807,20 @@ mod tests {
     #[test]
     fn test_merge() {
         let manager = setup_db(".temp/test_merge");
-        manager.put("key1".to_string(), r#"{"field": "value1"}"#.to_string(), None).unwrap();
-        manager.merge("key1".to_string(), r#"{"field": "value2"}"#.to_string(), None).unwrap();
+        manager
+            .put(
+                "key1".to_string(),
+                r#"{"field": "value1"}"#.to_string(),
+                None,
+            )
+            .unwrap();
+        manager
+            .merge(
+                "key1".to_string(),
+                r#"{"field": "value2"}"#.to_string(),
+                None,
+            )
+            .unwrap();
         let result = manager.get("key1".to_string(), None, None).unwrap();
         assert_eq!(result, Some(r#"{"field":"value2"}"#.to_string()));
     }
@@ -658,8 +828,12 @@ mod tests {
     #[test]
     fn test_list_column_families() {
         let manager = setup_db(".temp/test_list_column_families");
-        manager.create_column_family("test_list_column_families".to_string()).unwrap();
-        let result = manager.list_column_families(".temp/test_list_column_families".to_string()).unwrap();
+        manager
+            .create_column_family("test_list_column_families".to_string())
+            .unwrap();
+        let result = manager
+            .list_column_families(".temp/test_list_column_families".to_string())
+            .unwrap();
         assert!(result.contains(&"test_list_column_families".to_string()));
     }
 
@@ -667,28 +841,46 @@ mod tests {
     fn test_create_and_drop_column_family() {
         let manager = setup_db(".temp/test_create_and_drop_column_family");
         manager.create_column_family("new_cf".to_string()).unwrap();
-        manager.create_column_family("test_list_column_families".to_string()).unwrap();
-        let result = manager.list_column_families(".temp/test_create_and_drop_column_family".to_string()).unwrap();
+        manager
+            .create_column_family("test_list_column_families".to_string())
+            .unwrap();
+        let result = manager
+            .list_column_families(".temp/test_create_and_drop_column_family".to_string())
+            .unwrap();
         assert!(result.contains(&"new_cf".to_string()));
         manager.drop_column_family("new_cf".to_string()).unwrap();
-        let result = manager.list_column_families(".temp/test_create_and_drop_column_family".to_string()).unwrap();
+        let result = manager
+            .list_column_families(".temp/test_create_and_drop_column_family".to_string())
+            .unwrap();
         assert!(!result.contains(&"new_cf".to_string()));
     }
 
     #[test]
     fn test_compact_range() {
         let manager = setup_db(".temp/test_compact_range");
-        manager.put("key1".to_string(), "value1".to_string(), None).unwrap();
-        manager.put("key2".to_string(), "value2".to_string(), None).unwrap();
-        manager.compact_range(Some("key1".to_string()), Some("key2".to_string()), None).unwrap();
+        manager
+            .put("key1".to_string(), "value1".to_string(), None)
+            .unwrap();
+        manager
+            .put("key2".to_string(), "value2".to_string(), None)
+            .unwrap();
+        manager
+            .compact_range(Some("key1".to_string()), Some("key2".to_string()), None)
+            .unwrap();
     }
 
     #[test]
     fn test_write_batch_operations() {
         let manager = setup_db(".temp/test_write_batch_operations");
-        manager.write_batch_put("key1".to_string(), "value1".to_string(), None).unwrap();
-        manager.write_batch_merge("key1".to_string(), "value2".to_string(), None).unwrap();
-        manager.write_batch_delete("key1".to_string(), None).unwrap();
+        manager
+            .write_batch_put("key1".to_string(), "value1".to_string(), None)
+            .unwrap();
+        manager
+            .write_batch_merge("key1".to_string(), "value2".to_string(), None)
+            .unwrap();
+        manager
+            .write_batch_delete("key1".to_string(), None)
+            .unwrap();
         manager.write_batch_write().unwrap();
         let result = manager.get("key1".to_string(), None, None).unwrap();
         assert_eq!(result, None);
@@ -697,7 +889,9 @@ mod tests {
     #[test]
     fn test_write_batch_clear_and_destroy() {
         let manager = setup_db(".temp/test_write_batch_clear_and_destroy");
-        manager.write_batch_put("key1".to_string(), "value1".to_string(), None).unwrap();
+        manager
+            .write_batch_put("key1".to_string(), "value1".to_string(), None)
+            .unwrap();
         manager.write_batch_clear().unwrap();
         manager.write_batch_write().unwrap();
         let result = manager.get("key1".to_string(), None, None).unwrap();

@@ -3,10 +3,10 @@
 
 mod request_builder;
 
-use tokio::runtime::Runtime;
-use std::collections::HashMap;
-use ext_php_rs::prelude::*;
 use crate::request_builder::{RequestBuilder, RequestHandler};
+use ext_php_rs::prelude::*;
+use std::collections::HashMap;
+use tokio::runtime::Runtime;
 
 #[php_class(name = "RocksDBClient")]
 pub struct RocksDBClient {
@@ -17,7 +17,9 @@ pub struct RocksDBClient {
 impl RocksDBClient {
     #[constructor]
     pub fn __construct(host: String, port: u16) -> PhpResult<Self> {
-        Ok(Self { request_handler: RequestHandler::new(host, port) })
+        Ok(Self {
+            request_handler: RequestHandler::new(host, port),
+        })
     }
 
     #[php_method]
@@ -28,7 +30,9 @@ impl RocksDBClient {
             .set_cf_name(cf_name.unwrap_or_default())
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -41,7 +45,9 @@ impl RocksDBClient {
             .set_cf_name(cf_name.unwrap_or_default())
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response)
@@ -54,7 +60,9 @@ impl RocksDBClient {
             .set_cf_name(cf_name.unwrap_or_default())
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -68,7 +76,9 @@ impl RocksDBClient {
             .set_cf_name(cf_name.unwrap_or_default())
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -80,12 +90,15 @@ impl RocksDBClient {
             .set_value(path)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
-            let result: Vec<String> = serde_json::from_str(&response.result.unwrap_or("[]".to_string()))
-                .map_err(|e| format!("Deserialization error: {}", e))?;
+            let result: Vec<String> =
+                serde_json::from_str(&response.result.unwrap_or("[]".to_string()))
+                    .map_err(|e| format!("Deserialization error: {}", e))?;
             Ok(result)
         } else {
             Err(response.error.unwrap_or("Unknown error".to_string()).into())
@@ -98,7 +111,9 @@ impl RocksDBClient {
             .set_value(cf_name)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -110,14 +125,21 @@ impl RocksDBClient {
             .set_value(cf_name)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
     }
 
     #[php_method]
-    pub fn compact_range(&self, start: Option<String>, end: Option<String>, cf_name: Option<String>) -> PhpResult<()> {
+    pub fn compact_range(
+        &self,
+        start: Option<String>,
+        end: Option<String>,
+        cf_name: Option<String>,
+    ) -> PhpResult<()> {
         let mut request_builder = RequestBuilder::new("compact_range");
 
         if let Some(start_key) = start {
@@ -134,7 +156,9 @@ impl RocksDBClient {
 
         let request = request_builder.build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -142,28 +166,42 @@ impl RocksDBClient {
 
     // -- write batch methods
     #[php_method]
-    pub fn write_batch_put(&self, key: String, value: String, cf_name: Option<String>) -> PhpResult<()> {
+    pub fn write_batch_put(
+        &self,
+        key: String,
+        value: String,
+        cf_name: Option<String>,
+    ) -> PhpResult<()> {
         let request = RequestBuilder::new("write_batch_put")
             .set_key(key)
             .set_value(value)
             .set_cf_name(cf_name.unwrap_or_default())
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
     }
 
     #[php_method]
-    pub fn write_batch_merge(&self, key: String, value: String, cf_name: Option<String>) -> PhpResult<()> {
+    pub fn write_batch_merge(
+        &self,
+        key: String,
+        value: String,
+        cf_name: Option<String>,
+    ) -> PhpResult<()> {
         let request = RequestBuilder::new("write_batch_merge")
             .set_key(key)
             .set_value(value)
             .set_cf_name(cf_name.unwrap_or_default())
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -176,7 +214,9 @@ impl RocksDBClient {
             .set_cf_name(cf_name.unwrap_or_default())
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -186,7 +226,9 @@ impl RocksDBClient {
     pub fn write_batch_write(&self) -> PhpResult<()> {
         let request = RequestBuilder::new("write_batch_write").build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -196,7 +238,9 @@ impl RocksDBClient {
     pub fn write_batch_clear(&self) -> PhpResult<()> {
         let request = RequestBuilder::new("write_batch_clear").build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -206,7 +250,9 @@ impl RocksDBClient {
     pub fn write_batch_destroy(&self) -> PhpResult<()> {
         let request = RequestBuilder::new("write_batch_destroy").build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response).map(|_| ())
@@ -217,7 +263,9 @@ impl RocksDBClient {
     pub fn create_iterator(&self) -> PhpResult<Option<String>> {
         let request = RequestBuilder::new("create_iterator").build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response)
@@ -229,7 +277,9 @@ impl RocksDBClient {
             .set_iterator_id(iterator_id)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response)
@@ -242,20 +292,28 @@ impl RocksDBClient {
             .set_key(key)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response)
     }
 
     #[php_method]
-    pub fn iterator_seek_for_prev(&self, iterator_id: usize, key: String) -> PhpResult<Option<String>> {
+    pub fn iterator_seek_for_prev(
+        &self,
+        iterator_id: usize,
+        key: String,
+    ) -> PhpResult<Option<String>> {
         let request = RequestBuilder::new("iterator_seek_for_prev")
             .set_iterator_id(iterator_id)
             .set_key(key)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response)
@@ -267,7 +325,9 @@ impl RocksDBClient {
             .set_iterator_id(iterator_id)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         if response.success {
@@ -283,7 +343,9 @@ impl RocksDBClient {
             .set_iterator_id(iterator_id)
             .build();
 
-        let response = Runtime::new().unwrap().block_on(self.request_handler.send_request(request))
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
             .map_err(|e| PhpException::default(format!("Error sending request: {}", e)))?;
 
         self.request_handler.handle_response(response)
