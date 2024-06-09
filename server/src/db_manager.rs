@@ -8,6 +8,7 @@ use rust_rocksdb::{DBWithThreadMode, MultiThreaded, Options, ColumnFamilyDescrip
 use rust_rocksdb::backup::{BackupEngine, BackupEngineInfo, BackupEngineOptions, RestoreOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value};
+use log::{info, debug, error};
 
 pub type DbInstance = Arc<Mutex<Option<DBWithThreadMode<MultiThreaded>>>>;
 
@@ -28,10 +29,10 @@ pub fn json_merge(
         if let Ok(patch) = serde_json::from_slice::<Vec<PatchOperation>>(op) {
             let patch = Patch(patch);
             if let Err(e) = json_patch::patch(&mut doc, &patch) {
-                eprintln!("Failed to apply patch: {:?}", e);
+                error!("Failed to apply patch: {:?}", e);
             }
         } else {
-            eprintln!("Failed to deserialize operand");
+            error!("Failed to deserialize operand");
         }
     }
 
@@ -39,14 +40,13 @@ pub fn json_merge(
     match serde_json::to_vec(&doc) {
         Ok(bytes) => Some(bytes),
         Err(e) => {
-            eprintln!("Failed to serialize JSON: {:?}", e);
+            error!("Failed to serialize JSON: {:?}", e);
             None
         }
     }
 }
 
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct BackupInfo {
     timestamp: i64,
     backup_id: u32,
@@ -75,6 +75,8 @@ pub struct RocksDBManager {
 
 impl RocksDBManager {
     pub fn new(db_path: &str, ttl_secs: Option<u64>) -> Result<Self, String> {
+        info!("Initializing RocksDBManager with db_path: {}, ttl_secs: {:?}", db_path, ttl_secs);
+
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_merge_operator_associative("json_merge", json_merge);
@@ -104,6 +106,8 @@ impl RocksDBManager {
         let iterators = Mutex::new(HashMap::new());
         let iterator_id_counter = AtomicUsize::new(0);
 
+        info!("RocksDBManager initialized successfully");
+
         Ok(RocksDBManager {
             db,
             db_path: db_path.to_string(),
@@ -114,24 +118,28 @@ impl RocksDBManager {
     }
 
     pub fn put(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
+        debug!("Putting key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
-            match cf_name {
+            let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     db.put_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
                 }
                 None => db.put(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-            }
+            };
+            debug!("Put result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn get(&self, key: String, cf_name: Option<String>, default: Option<String>) -> Result<Option<String>, String> {
+        debug!("Getting key: {}, cf_name: {:?}, default: {:?}", key, cf_name, default);
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
-            match cf_name {
+            let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     match db.get_cf(&cf, key.as_bytes()) {
@@ -147,43 +155,52 @@ impl RocksDBManager {
                         Err(e) => Err(e.to_string()),
                     }
                 }
-            }
+            };
+            debug!("Get result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn delete(&self, key: String, cf_name: Option<String>) -> Result<(), String> {
+        debug!("Deleting key: {}, cf_name: {:?}", key, cf_name);
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
-            match cf_name {
+            let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     db.delete_cf(&cf, key.as_bytes()).map_err(|e| e.to_string())
                 }
                 None => db.delete(key.as_bytes()).map_err(|e| e.to_string()),
-            }
+            };
+            debug!("Delete result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
+        debug!("Merging key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
-            match cf_name {
+            let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     db.merge_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
                 }
                 None => db.merge(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-            }
+            };
+            debug!("Merge result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
-    pub fn get_keys(&self, start: usize, limit: usize, query: Option<String>) -> Result<Vec<String>, String> {
+    pub fn get_all(&self, query: Option<String>) -> Result<Vec<String>, String> {
+        debug!("Get all keys with query: {:?}", query);
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let iter = db.iterator(rust_rocksdb::IteratorMode::Start);
@@ -205,24 +222,33 @@ impl RocksDBManager {
                     }
                     Err(_) => None,
                 })
-                .skip(start)
-                .take(limit)
                 .collect();
 
+            debug!("Get all result: {:?}", keys);
             Ok(keys)
         } else {
             Err("Database is not open".to_string())
         }
     }
 
+    pub fn get_keys(&self, start: usize, limit: usize, query: Option<String>) -> Result<Vec<String>, String> {
+        debug!("Get keys with start: {}, limit: {}, query: {:?}", start, limit, query);
+        let mut keys = self.get_all(query)?;
+        keys = keys.into_iter().skip(start).take(limit).collect();
+        debug!("Get keys result: {:?}", keys);
+        Ok(keys)
+    }
 
     pub fn close(&self) -> Result<(), String> {
+        info!("Closing database");
         let mut db_lock = self.db.lock().unwrap();
         *db_lock = None;
         Ok(())
     }
 
     pub fn reopen(&self) -> Result<(), String> {
+        info!("Reopening database with db_path: {}", self.db_path);
+
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_merge_operator_associative("json_merge", json_merge);
@@ -241,56 +267,69 @@ impl RocksDBManager {
             .map_err(|e| e.to_string())?;
         let mut db_lock = self.db.lock().unwrap();
         *db_lock = Some(new_db);
+
+        info!("Database reopened successfully");
         Ok(())
     }
 
     pub fn reload(&self) -> Result<(), String> {
+        info!("Reloading database");
         self.close().unwrap();
         self.reopen().unwrap();
 
-        println!("Database reloaded successfully.");
+        info!("Database reloaded successfully");
         Ok(())
     }
 
     pub fn list_column_families(&self, path: String) -> Result<Vec<String>, String> {
+        debug!("Listing column families for path: {}", path);
         let opts = Options::default();
-        DBWithThreadMode::<MultiThreaded>::list_cf(&opts, path).map_err(|e| e.to_string())
+        let result = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, path).map_err(|e| e.to_string());
+        debug!("List column families result: {:?}", result);
+        result
     }
 
     pub fn create_column_family(&self, cf_name: String) -> Result<(), String> {
+        info!("Creating column family: {}", cf_name);
         let mut db = self.db.lock().unwrap();
         if let Some(ref mut db) = *db {
             let cf_exists = db.cf_handle(&cf_name).is_some();
-            if cf_exists {
+            let result = if cf_exists {
                 Ok(())
             } else {
                 let mut opts = Options::default();
                 opts.set_merge_operator_associative("json_merge", json_merge);
                 db.create_cf(&cf_name, &opts).map_err(|e| e.to_string())
-            }
+            };
+            debug!("Create column family result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn drop_column_family(&self, cf_name: String) -> Result<(), String> {
+        info!("Dropping column family: {}", cf_name);
         let mut db = self.db.lock().unwrap();
         if let Some(ref mut db) = *db {
             let cf_exists = db.cf_handle(&cf_name).is_some();
-            if !cf_exists {
+            let result = if !cf_exists {
                 Ok(())
             } else {
                 db.drop_cf(&cf_name).map_err(|e| e.to_string())
-            }
+            };
+            debug!("Drop column family result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn compact_range(&self, start: Option<String>, end: Option<String>, cf_name: Option<String>) -> Result<(), String> {
+        debug!("Compacting range with start: {:?}, end: {:?}, cf_name: {:?}", start, end, cf_name);
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
-            match cf_name {
+            let result = match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).unwrap();
                     db.compact_range_cf(&cf, start.as_deref(), end.as_deref());
@@ -300,18 +339,20 @@ impl RocksDBManager {
                     db.compact_range(start.as_deref(), end.as_deref());
                     Ok(())
                 }
-            }
+            };
+            debug!("Compact range result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
-
     pub fn write_batch_put(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
+        debug!("Write batch put with key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
         let db = self.db.lock().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
-            if let Some(ref mut wb) = *batch {
+            let result = if let Some(ref mut wb) = *batch {
                 match cf_name {
                     Some(cf_name) => {
                         let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
@@ -324,17 +365,20 @@ impl RocksDBManager {
                 Ok(())
             } else {
                 Err("WriteBatch not initialized".into())
-            }
+            };
+            debug!("Write batch put result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn write_batch_merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<(), String> {
+        debug!("Write batch merge with key: {}, value: {}, cf_name: {:?}", key, value, cf_name);
         let db = self.db.lock().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
-            if let Some(ref mut wb) = *batch {
+            let result = if let Some(ref mut wb) = *batch {
                 match cf_name {
                     Some(cf_name) => {
                         let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
@@ -347,17 +391,20 @@ impl RocksDBManager {
                 Ok(())
             } else {
                 Err("WriteBatch not initialized".into())
-            }
+            };
+            debug!("Write batch merge result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn write_batch_delete(&self, key: String, cf_name: Option<String>) -> Result<(), String> {
+        debug!("Write batch delete with key: {}, cf_name: {:?}", key, cf_name);
         let db = self.db.lock().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
-            if let Some(ref mut wb) = *batch {
+            let result = if let Some(ref mut wb) = *batch {
                 match cf_name {
                     Some(cf_name) => {
                         let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
@@ -370,30 +417,36 @@ impl RocksDBManager {
                 Ok(())
             } else {
                 Err("WriteBatch not initialized".into())
-            }
+            };
+            debug!("Write batch delete result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn write_batch_write(&self) -> Result<(), String> {
+        debug!("Write batch write");
         let db = self.db.lock().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
-            if let Some(wb) = batch.take() {
+            let result = if let Some(wb) = batch.take() {
                 db.write(wb)
                     .map_err(|e| e.to_string())?;
                 *batch = Some(WriteBatchWithTransaction::default());
                 Ok(())
             } else {
                 Err("WriteBatch not initialized".into())
-            }
+            };
+            debug!("Write batch write result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn write_batch_clear(&self) -> Result<(), String> {
+        debug!("Write batch clear");
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref mut wb) = *batch {
             wb.clear();
@@ -404,12 +457,14 @@ impl RocksDBManager {
     }
 
     pub fn write_batch_destroy(&self) -> Result<(), String> {
+        debug!("Write batch destroy");
         let mut batch = self.write_batch.lock().unwrap();
         *batch = None;
         Ok(())
     }
 
     pub fn create_iterator(&self) -> usize {
+        debug!("Creating iterator");
         let mut iterators = self.iterators.lock().unwrap();
         let id = self.iterator_id_counter.fetch_add(1, Ordering::SeqCst);
         iterators.insert(id, (vec![], rust_rocksdb::Direction::Forward));
@@ -417,6 +472,7 @@ impl RocksDBManager {
     }
 
     pub fn destroy_iterator(&self, iterator_id: usize) -> Result<(), String> {
+        debug!("Destroying iterator with id: {}", iterator_id);
         let mut iterators = self.iterators.lock().unwrap();
         if iterators.remove(&iterator_id).is_some() {
             Ok(())
@@ -426,6 +482,14 @@ impl RocksDBManager {
     }
 
     pub fn iterator_seek(&self, iterator_id: usize, key: String, direction: rust_rocksdb::Direction) -> Result<String, String> {
+        match direction {
+            rust_rocksdb::Direction::Forward => {
+                debug!("Iterator seek with id: {}, key: {}, direction: Forward", iterator_id, key);
+            }
+            rust_rocksdb::Direction::Reverse => {
+                debug!("Iterator seek with id: {}, key: {}, direction: Reverse", iterator_id, key);
+            }
+        }
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let mut iterators = self.iterators.lock().unwrap();
@@ -434,7 +498,9 @@ impl RocksDBManager {
                 if let Some(Ok((k, _))) = iter.next() {
                     iterator.0 = k.to_vec();
                     iterator.1 = direction;
-                    Ok(String::from_utf8(k.to_vec()).unwrap())
+                    let result = Ok(String::from_utf8(k.to_vec()).unwrap());
+                    debug!("Iterator seek result: {:?}", result);
+                    result
                 } else {
                     Err("Iterator is invalid".to_string())
                 }
@@ -447,6 +513,7 @@ impl RocksDBManager {
     }
 
     pub fn iterator_next(&self, iterator_id: usize) -> Result<String, String> {
+        debug!("Iterator next with id: {}", iterator_id);
         let db = self.db.lock().unwrap();
         let mut iterators = self.iterators.lock().unwrap();
         if let Some(ref db) = *db {
@@ -456,7 +523,9 @@ impl RocksDBManager {
                 iter.next(); // Move to current position
                 if let Some(Ok((k, v))) = iter.next() {
                     pos.clone_from_slice(&*k);
-                    Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()))
+                    let result = Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()));
+                    debug!("Iterator next result: {:?}", result);
+                    result
                 } else {
                     Err("Iterator is invalid".to_string())
                 }
@@ -469,6 +538,7 @@ impl RocksDBManager {
     }
 
     pub fn iterator_prev(&self, iterator_id: usize) -> Result<String, String> {
+        debug!("Iterator prev with id: {}", iterator_id);
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
             let mut iterators = self.iterators.lock().unwrap();
@@ -478,7 +548,9 @@ impl RocksDBManager {
                 iter.next(); // Move to current position
                 if let Some(Ok((k, v))) = iter.next() {
                     pos.clone_from_slice(&*k);
-                    Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()))
+                    let result = Ok(format!("{}:{}", String::from_utf8(k.to_vec()).unwrap(), String::from_utf8(v.to_vec()).unwrap()));
+                    debug!("Iterator prev result: {:?}", result);
+                    result
                 } else {
                     Err("Iterator is invalid".to_string())
                 }
@@ -491,47 +563,56 @@ impl RocksDBManager {
     }
 
     pub fn backup(&self) -> Result<(), String> {
+        info!("Creating backup");
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
         let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
 
         let db = self.db.lock().unwrap();
         if let Some(ref db) = *db {
-            backup_engine.create_new_backup(db).map_err(|e| e.to_string())
+            let result = backup_engine.create_new_backup(db).map_err(|e| e.to_string());
+            debug!("Backup result: {:?}", result);
+            result
         } else {
             Err("Database is not open".to_string())
         }
     }
 
     pub fn restore_latest_backup(&self) -> Result<(), String> {
+        info!("Restoring latest backup");
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
         let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
 
         let restore_opts = RestoreOptions::default();
-        backup_engine.restore_from_latest_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts).map_err(|e| e.to_string())?;
+        let result = backup_engine.restore_from_latest_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts).map_err(|e| e.to_string())?;
         self.reload()?;
+        debug!("Restore latest backup result: {:?}", result);
         Ok(())
     }
 
     pub fn restore_backup(&self, backup_id: u32) -> Result<(), String> {
+        info!("Restoring backup with id: {}", backup_id);
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
         let mut backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
 
         let restore_opts = RestoreOptions::default();
-        backup_engine.restore_from_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts, backup_id).map_err(|e| e.to_string())?;
+        let result = backup_engine.restore_from_backup(Path::new(&self.db_path), Path::new(&self.db_path), &restore_opts, backup_id).map_err(|e| e.to_string())?;
         self.reload()?;
+        debug!("Restore backup result: {:?}", result);
         Ok(())
     }
 
     pub fn get_backup_info(&self) -> Result<Vec<BackupInfo>, String> {
+        info!("Getting backup info");
         let backup_path = format!("{}/backup", self.db_path);
         let backup_opts = BackupEngineOptions::new(&backup_path).map_err(|e| e.to_string())?;
         let backup_engine = BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
 
         let info = backup_engine.get_backup_info();
         let backup_info: Vec<BackupInfo> = info.into_iter().map(BackupInfo::from).collect();
+        debug!("Get backup info result: {:?}", backup_info);
         Ok(backup_info)
     }
 }
