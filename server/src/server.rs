@@ -14,6 +14,7 @@ pub struct Request {
     pub cf_name: Option<String>,
     pub options: Option<HashMap<String, String>>,
     pub token: Option<String>,
+    pub txn_id: Option<usize>
 }
 
 impl Request {
@@ -137,6 +138,9 @@ impl RocksDBServer {
             "restore_latest" => self.handle_restore_latest().await,
             "restore" => self.handle_restore_request(req.clone()).await,
             "get_backup_info" => self.handle_get_backup_info().await,
+            "begin_transaction" => self.handle_begin_transaction().await,
+            "commit_transaction" => self.handle_commit_transaction(req.clone()).await,
+            "rollback_transaction" => self.handle_rollback_transaction(req.clone()).await,
             _ => Response {
                 success: false,
                 result: None,
@@ -155,7 +159,7 @@ impl RocksDBServer {
     async fn handle_put(&self, req: Request) -> Response {
         debug!("handle_put with key: {:?}, value: {:?}", req.key, req.value);
         match (req.key, req.value) {
-            (Some(key), Some(value)) => match self.db_manager.put(key, value, req.cf_name) {
+            (Some(key), Some(value)) => match self.db_manager.put(key, value, req.cf_name, req.txn_id) {
                 Ok(_) => Response {
                     success: true,
                     result: None,
@@ -178,7 +182,7 @@ impl RocksDBServer {
     async fn handle_get(&self, req: Request) -> Response {
         debug!("handle_get with key: {:?}", req.key);
         match req.key {
-            Some(key) => match self.db_manager.get(key, req.cf_name, req.default) {
+            Some(key) => match self.db_manager.get(key, req.cf_name, req.default, req.txn_id) {
                 Ok(Some(value)) => Response {
                     success: true,
                     result: Some(value),
@@ -206,7 +210,7 @@ impl RocksDBServer {
     async fn handle_delete(&self, req: Request) -> Response {
         debug!("handle_delete with key: {:?}", req.key);
         match req.key {
-            Some(key) => match self.db_manager.delete(key, req.cf_name) {
+            Some(key) => match self.db_manager.delete(key, req.cf_name, req.txn_id) {
                 Ok(_) => Response {
                     success: true,
                     result: None,
@@ -232,7 +236,7 @@ impl RocksDBServer {
             req.key, req.value
         );
         match (req.key, req.value) {
-            (Some(key), Some(value)) => match self.db_manager.merge(key, value, req.cf_name) {
+            (Some(key), Some(value)) => match self.db_manager.merge(key, value, req.cf_name, req.txn_id) {
                 Ok(_) => Response {
                     success: true,
                     result: None,
@@ -718,5 +722,81 @@ impl RocksDBServer {
                 error: Some(e),
             },
         }
+    }
+
+
+    async fn handle_begin_transaction(&self) -> Response {
+        debug!("handle_begin_transaction");
+        match self.db_manager.begin_transaction() {
+            Ok(info) => {
+                let result = serde_json::to_string(&info).unwrap();
+                Response {
+                    success: true,
+                    result: Some(result),
+                    error: None,
+                }
+            }
+            Err(e) => Response {
+                success: false,
+                result: None,
+                error: Some(e),
+            },
+        }
+    }
+
+    async fn handle_commit_transaction(&self, req: Request) -> Response {
+        debug!("handle_commit_transaction, txn_id: {:?}", req.txn_id);
+
+        match req.txn_id {
+            Some(txn_id) => match self.db_manager.commit_transaction(txn_id) {
+                Ok(info) => {
+                    let result = serde_json::to_string(&info).unwrap();
+                    Response {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                    }
+                }
+                Err(e) => Response {
+                    success: false,
+                    result: None,
+                    error: Some(e),
+                },
+            },
+            None => Response {
+                success: false,
+                result: None,
+                error: Some("Missing txn_id".to_string()),
+            },
+        }
+    }
+
+    async fn handle_rollback_transaction(&self, req: Request) -> Response {
+        debug!("handle_rollback_transaction, txn_id: {:?}", req.txn_id);
+
+        match req.txn_id {
+            Some(txn_id) => match self.db_manager.rollback_transaction(txn_id) {
+                Ok(info) => {
+                    let result = serde_json::to_string(&info).unwrap();
+                    Response {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                    }
+                }
+                Err(e) => Response {
+                    success: false,
+                    result: None,
+                    error: Some(e),
+                },
+            },
+            None => Response {
+                success: false,
+                result: None,
+                error: Some("Missing txn_id".to_string()),
+            },
+        }
+
+
     }
 }
