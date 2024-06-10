@@ -62,22 +62,8 @@ jobs:
         run: |
           echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-15/lib" >> $GITHUB_ENV
           echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
-          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
+          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-15/bin/llvm-config" >> $GITHUB_ENV
 
-#      - name: Setup osxcross toolchain on macOS for macOS targets
-#        if: matrix.os == 'macos-latest'
-#        run: |
-#          brew install llvm
-#          git clone https://github.com/tpoechtrager/osxcross.git
-#          cd osxcross
-#          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
-#          tar -xf MacOSX11.3.sdk.tar.xz
-#          mv MacOSX11.3.sdk tarballs/
-#          SDK_VERSION=11.3 OSX_VERSION_MIN=11.0 ./build.sh
-#          cd ..
-#          echo "CC=$(pwd)/osxcross/target/bin/o64-clang" >> $GITHUB_ENV
-#          echo "CXX=$(pwd)/osxcross/target/bin/o64-clang++" >> $GITHUB_ENV
-#          echo "PATH=$(pwd)/osxcross/target/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install Rust toolchain on Linux and macOS
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
@@ -110,10 +96,6 @@ jobs:
         run: |
           mkdir -p releases
           for target in ${{ matrix.targets }}; do
-            if [[ "$target" == *"apple-darwin"* ]]; then
-              export CC=$(pwd)/osxcross/target/bin/o64-clang
-              export CXX=$(pwd)/osxcross/target/bin/o64-clang++
-            fi
             cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
             cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
           done
