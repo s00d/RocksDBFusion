@@ -54,7 +54,7 @@ jobs:
             C:\Users\runneradmin\.cargo\registry\cache\
             C:\Users\runneradmin\.cargo\git\db\
             target\
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo
           restore-keys: |
             ${{ runner.os }}-cargo-
 
