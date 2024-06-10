@@ -35,6 +35,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu
 
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.php-version }}-${{ matrix.target }}
+
       - name: Setup LLVM & Clang on Linux
         if: matrix.os == 'ubuntu-latest'
         uses: KyleMayes/install-llvm-action@v2
