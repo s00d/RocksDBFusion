@@ -43,27 +43,6 @@ jobs:
           echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
           echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
 
-      - name: Install osxcross toolchain
-        if: matrix.os == 'macos-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl make gcc
-          git clone https://github.com/tpoechtrager/osxcross.git
-          cd osxcross
-          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
-          tar -xf MacOSX11.3.sdk.tar.xz
-          mv MacOSX11.3.sdk tarballs/
-          SDK_VERSION=11.3 OSX_VERSION_MIN=11.0 ./build.sh V=1 2>&1 | tee build.log
-          echo "CC=$(pwd)/target/bin/o64-clang" >> $GITHUB_ENV
-          echo "CXX=$(pwd)/target/bin/o64-clang++" >> $GITHUB_ENV
-          echo "PATH=$(pwd)/target/bin:$PATH" >> $GITHUB_ENV
-
-      - name: Install AArch64 toolchain
-        if: matrix.os == 'macos-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-
       - name: Install latest Rust toolchain
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
