@@ -60,7 +60,7 @@ jobs:
           rustup target add x86_64-pc-windows-msvc
           rustup target add x86_64-pc-windows-gnu
           rustup target add i686-pc-windows-msvc
-          rustup +nightly target add aarch64-apple-darwin
+          rustup target add aarch64-apple-darwin
 
       - name: Get version
         id: version
@@ -87,15 +87,8 @@ jobs:
       - name: Build and Release
         if: steps.version-check.outputs.exists == 'false'
         run: |
-          mkdir -p releases
-
-          for target in aarch64-unknown-linux-gnu i586-unknown-linux-gnu powerpc-unknown-linux-gnu x86_64-unknown-linux-gnu x86_64-apple-darwin x86_64-pc-windows-msvc x86_64-pc-windows-gnu i686-pc-windows-msvc; do
-            cargo build --release --target $target --manifest-path=server/Cargo.toml
-            cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
-          done
-
-          cargo +nightly build --release --target aarch64-apple-darwin --manifest-path=server/Cargo.toml
-          cp target/aarch64-apple-darwin/release/server releases/server-${{ steps.version.outputs.version }}-aarch64-apple-darwin
+          cargo build --release --target $target --manifest-path=server/Cargo.toml
+          cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
 
       - name: Create Release
         if: steps.version-check.outputs.exists == 'false'
