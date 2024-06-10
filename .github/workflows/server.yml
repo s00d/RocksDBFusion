@@ -75,6 +75,15 @@ jobs:
             rustup target add $target
           }
 
+      - name: Setup LLVM & Clang on Linux
+        if: matrix.os == 'ubuntu-latest'
+        id: setup_llvm
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: 16
+          directory: ${{ runner.temp }}/llvm
+
+
       - name:  Install Rust toolchain on Linux and macOS
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
