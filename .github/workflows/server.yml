@@ -19,7 +19,7 @@ jobs:
         #        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
-            targets: aarch64-unknown-linux-gnu i586-unknown-linux-gnu powerpc-unknown-linux-gnu armv7-unknown-linux-gnueabihf arm-unknown-linux-gnueabihf
+            targets: arm-unknown-linux-gnueabi i586-unknown-linux-gnu powerpc-unknown-linux-gnu armv7-unknown-linux-gnueabihf arm-unknown-linux-gnueabihf
 #            targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu i586-unknown-linux-gnu powerpc-unknown-linux-gnu armv7-unknown-linux-gnueabihf arm-unknown-linux-gnueabihf
           #          - os: macos-latest
           #            targets: x86_64-apple-darwin aarch64-apple-darwin
