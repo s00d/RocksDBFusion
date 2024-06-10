@@ -56,10 +56,10 @@ jobs:
       - name: Install Rust toolchain on Windows
         if: matrix.os == 'windows-latest'
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init.exe
-          .\rustup-init.exe -y
-          $Env:Path += ";$Env:USERPROFILE\.cargo\bin"
-          rustup default stable
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+          Start-Process -FilePath .\rustup-init.exe -ArgumentList '-y' -NoNewWindow -Wait
+          $env:Path += ';C:\Users\runneradmin\.cargo\bin'
           $targets = "${{ matrix.targets }}".Split(" ")
           foreach ($target in $targets) {
             rustup target add $target
