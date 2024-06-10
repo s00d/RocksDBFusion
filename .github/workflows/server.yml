@@ -110,7 +110,7 @@ jobs:
           echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
           for target in ${{ matrix.targets }}; do
             cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
-            cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
+            cp target/$target/release/rocksdb_server releases/server-${{ steps.version.outputs.version }}-$target
           done
 
       - name: Build and Release on Windows
@@ -121,7 +121,7 @@ jobs:
           foreach ($target in $targets) {
             cargo build --release --target $target --manifest-path=server/Cargo.toml
             if ($?) {
-              Copy-Item -Path "target\$target\release\server.exe" -Destination "releases\server-${{ steps.version.outputs.version }}-$target.exe"
+              Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ steps.version.outputs.version }}-$target.exe"
             }
           }
 
