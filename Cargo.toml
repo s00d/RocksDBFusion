@@ -1,5 +1,5 @@
 [workspace]
-members = ["server", "client", 'rocksdb-viewer/src-tauri']
+members = ["server", "client"]
 resolver = "2"
 
 [profile.release]

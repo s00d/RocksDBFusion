@@ -2,8 +2,9 @@
 <module type="EMPTY_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <sourceFolder url="file://$MODULE_DIR$/client-php/src" isTestSource="false" packagePrefix="RocksDBClient\" />
-      <sourceFolder url="file://$MODULE_DIR$/client-php/tests" isTestSource="true" packagePrefix="RocksDBClient\Tests\" />
+      <sourceFolder url="file://$MODULE_DIR$/client-php/src" isTestSource="false" packagePrefix="s00d\RocksDB\" />
+      <sourceFolder url="file://$MODULE_DIR$/client-php/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/client-php/tests" isTestSource="true" packagePrefix="s00d\RRocksDB\Tests\" />
       <sourceFolder url="file://$MODULE_DIR$/client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rocksdb-viewer/src-tauri/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/src" isTestSource="false" />
