@@ -35,7 +35,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/
@@ -44,6 +44,19 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ matrix.php-version }}-${{ matrix.target }}
+
+      - name: Setup cache on Windows
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v2
+        with:
+          path: |
+            C:\Users\runneradmin\.cargo\registry\index\
+            C:\Users\runneradmin\.cargo\registry\cache\
+            C:\Users\runneradmin\.cargo\git\db\
+            target\
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Setup LLVM & Clang on Linux
         if: matrix.os == 'ubuntu-latest'
