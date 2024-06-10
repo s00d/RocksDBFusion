@@ -107,8 +107,12 @@ jobs:
         env:
           LIBCLANG_PATH: ${{ runner.temp }}/llvm-15/lib
           DYLD_LIBRARY_PATH: ${{ runner.temp }}/llvm-15/lib
+          PATH: ${{ runner.temp }}/llvm-15/bin:$PATH
         run: |
           mkdir -p releases
+          echo "LIBCLANG_PATH=${LIBCLANG_PATH}"
+          echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
+          ls ${{ runner.temp }}/llvm-15/lib
           for target in ${{ matrix.targets }}; do
             cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
             cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
