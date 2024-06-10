@@ -109,8 +109,6 @@ jobs:
 
       - name: Build and Release on Linux and macOS
         if: matrix.os == 'ubuntu-latest'
-        env:
-          LIBCLANG_PATH: ${{ runner.temp }}/llvm-16/lib
         run: |
           mkdir -p releases
           for target in ${{ matrix.targets }}; do
