@@ -13,19 +13,8 @@ jobs:
     name: Build and Release
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        clang: ['16'] # Specify the Clang versions you want to use
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-          - i586-unknown-linux-gnu
-          - powerpc-unknown-linux-gnu
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
-          - x86_64-pc-windows-msvc
-          - x86_64-pc-windows-gnu
-          - i686-pc-windows-msvc
+    env:
+      TARGETS: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu i586-unknown-linux-gnu powerpc-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc x86_64-pc-windows-gnu i686-pc-windows-msvc
 
     steps:
       - name: Checkout repository
@@ -40,25 +29,24 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-            ${{ runner.temp }}/llvm-${{ matrix.clang }}
-          key: ${{ runner.os }}-cargo-llvm-${{ matrix.clang }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.temp }}/llvm-16
+          key: ${{ runner.os }}-cargo-llvm-16-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Setup LLVM & Clang
         id: clang
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: ${{ matrix.clang }}
-          directory: ${{ runner.temp }}/llvm-${{ matrix.clang }}
+          version: 16
+          directory: ${{ runner.temp }}/llvm-16
           cached: ${{ steps.cache.outputs.cache-hit }}
 
       - name: Configure Clang
         run: |
-          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-${{ matrix.clang }}/lib" >> $GITHUB_ENV
+          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-16/lib" >> $GITHUB_ENV
           echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
-          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-${{ matrix.clang }}/bin/llvm-config" >> $GITHUB_ENV
+          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
 
       - name: Install osxcross toolchain
-        if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
         run: |
           sudo apt-get update
           sudo apt-get install -y curl make gcc
@@ -74,7 +62,6 @@ jobs:
           echo "PATH=/home/runner/work/osxcross/target/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install AArch64 toolchain
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
@@ -84,7 +71,9 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
           rustup default stable
-          rustup target add ${{ matrix.target }}
+          for target in $TARGETS; do
+            rustup target add $target
+          done
 
       - name: Get version
         id: version
@@ -111,13 +100,19 @@ jobs:
       - name: Build and Release
         if: steps.version-check.outputs.exists == 'false'
         run: |
-          if [[ "${{ matrix.target }}" == *"darwin"* ]]; then
-            export CC=o64-clang
-            export CXX=o64-clang++
-          fi
-          cargo build --release --target ${{ matrix.target }} --manifest-path=server/Cargo.toml
           mkdir -p releases
-          cp target/${{ matrix.target }}/release/server releases/server-${{ steps.version.outputs.version }}-${{ matrix.target }}
+          for target in $TARGETS; do
+            if [[ "$target" == *"darwin"* ]]; then
+              export CC=o64-clang
+              export CXX=o64-clang++
+            fi
+            cargo build --release --target $target --manifest-path=server/Cargo.toml
+            if [[ "$target" == *"windows"* ]]; then
+              cp target/$target/release/server.exe releases/server-${{ steps.version.outputs.version }}-$target.exe
+            else
+              cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
+            fi
+          done
 
       - name: Create GitHub Release
         if: steps.version-check.outputs.exists == 'false'
@@ -136,6 +131,6 @@ jobs:
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: releases/server-${{ steps.version.outputs.version }}-${{ matrix.target }}
+          asset_path: releases/
           asset_name: server-${{ steps.version.outputs.version }}-${{ matrix.target }}
           asset_content_type: application/octet-stream
