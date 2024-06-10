@@ -20,8 +20,8 @@ jobs:
         include:
           #          - os: ubuntu-latest
           #            targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu i586-unknown-linux-gnu powerpc-unknown-linux-gnu
-#          - os: macos-latest
-#            targets: x86_64-apple-darwin aarch64-apple-darwin
+          #          - os: macos-latest
+          #            targets: x86_64-apple-darwin aarch64-apple-darwin
           - os: windows-latest
             targets: x86_64-pc-windows-msvc x86_64-pc-windows-gnu i686-pc-windows-msvc
 
@@ -76,6 +76,13 @@ jobs:
         id: version
         run: echo ::set-output name=version::$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
 
+      - name: Get version on Windows
+        id: version_windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          $version = (Get-Content server\Cargo.toml | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }).Trim()
+          echo "::set-output name=version::$version"
+
       - name: Build and Release on Linux and macOS
         if: matrix.os == 'ubuntu-latest'
         env:
@@ -106,7 +113,7 @@ jobs:
           foreach ($target in $targets) {
             cargo build --release --target $target --manifest-path=server/Cargo.toml
             if ($?) {
-              Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ steps.version.outputs.version }}-$target.exe"
+              Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ steps.version_windows.outputs.version }}-$target.exe"
             }
           }
 
@@ -114,8 +121,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: server-v${{ steps.version.outputs.version }}
-          name: Server Release ${{ steps.version.outputs.version }}
+          tag_name: server-v${{ steps.version.outputs.version || steps.version_windows.outputs.version }}
+          name: Server Release ${{ steps.version.outputs.version || steps.version_windows.outputs.version }}
           draft: false
           prerelease: false
         env:
@@ -135,7 +142,7 @@ jobs:
         run: |
           $files = Get-ChildItem -Path releases
           foreach ($file in $files) {
-            gh release upload server-v${{ steps.version.outputs.version }} $file.FullName --clobber
+            gh release upload server-v${{ steps.version_windows.outputs.version }} $file.FullName --clobber
           }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
