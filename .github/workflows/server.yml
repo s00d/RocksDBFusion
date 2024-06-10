@@ -69,7 +69,8 @@ jobs:
         id: version
         run: echo ::set-output name=version::$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
 
-      - name: Build and Release
+      - name: Build and Release on Linux and macOS
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
           mkdir -p releases
           for target in ${{ matrix.targets }}; do
@@ -78,12 +79,20 @@ jobs:
               export CXX=$(pwd)/osxcross/target/bin/o64-clang++
             fi
             cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
-            if [[ "$target" == *"windows"* ]]; then
-              cp target/$target/release/server.exe releases/server-${{ steps.version.outputs.version }}-$target.exe
-            else
-              cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
-            fi
+            cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
           done
+
+      - name: Build and Release on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p releases
+          $targets = "${{ matrix.targets }}".Split(" ")
+          foreach ($target in $targets) {
+            cargo build --release --target $target --manifest-path=server/Cargo.toml
+            if ($?) {
+              Copy-Item -Path "target\$target\release\server.exe" -Destination "releases\server-${{ steps.version.outputs.version }}-$target.exe"
+            }
+          }
 
       - name: Create GitHub Release
         id: create_release
