@@ -16,6 +16,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
+        clang: ["16"]
 #        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
@@ -35,10 +36,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi libc6-dev-armel-cross
 
-      - name: Set LIBCLANG_PATH
-        if: matrix.os == 'ubuntu-latest'
-        run: echo "LIBCLANG_PATH=/usr/lib/llvm-10/lib" >> $GITHUB_ENV
-
       - uses: actions/cache@v4
         with:
           path: |
@@ -50,6 +47,13 @@ jobs:
           key: ${{ matrix.os }}-cargo-${{ matrix.targets }}
           restore-keys: |
             ${{ matrix.os }}-cargo-
+
+      - name: Install LLVM and Clang
+        if: matrix.os == 'ubuntu-latest'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ matrix.clang }}
+          directory: ${{ runner.temp }}/llvm-${{ matrix.clang }}
 
       - name: Setup cache on Windows
         if: matrix.os == 'windows-latest'
