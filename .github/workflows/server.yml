@@ -35,9 +35,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi libc6-dev-armel-cross
 
-      - name: Set LIBCLANG_PATH
-        if: matrix.os == 'ubuntu-latest'
-        run: echo "LIBCLANG_PATH=/usr/lib/llvm-10/lib" >> $GITHUB_ENV
 
       - uses: actions/cache@v4
         with:
@@ -48,33 +45,9 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ matrix.os }}-cargo-${{ matrix.targets }}
+          enableCrossOsArchive: true
           restore-keys: |
             ${{ matrix.os }}-cargo-
-
-      - name: Setup cache on Windows
-        if: matrix.os == 'windows-latest'
-        uses: actions/cache@v4
-        with:
-          path: |
-            C:\Users\runneradmin\.cargo\registry\index\
-            C:\Users\runneradmin\.cargo\registry\cache\
-            C:\Users\runneradmin\.cargo\git\db\
-            target\
-          key: ${{ runner.os }}-cargo
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Install Rust toolchain on Windows
-        if: matrix.os == 'windows-latest'
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
-          Start-Process -FilePath .\rustup-init.exe -ArgumentList '-y' -NoNewWindow -Wait
-          $env:Path += ';C:\Users\runneradmin\.cargo\bin'
-          $targets = "${{ matrix.targets }}".Split(" ")
-          foreach ($target in $targets) {
-            rustup target add $target
-          }
 
       - name: Install Rust toolchain on Linux and macOS
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
@@ -85,6 +58,9 @@ jobs:
           for target in ${{ matrix.targets }}; do
             rustup target add $target
           done
+
+      - name: Install cross
+        run: cargo install cross
 
       - name: Get version
         id: version
@@ -102,7 +78,7 @@ jobs:
         run: |
           mkdir -p releases
           for target in ${{ matrix.targets }}; do
-            cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
+            cross build --release --target $target --manifest-path=server/Cargo.toml || continue
             cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
           done
 
@@ -110,10 +86,8 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           mkdir -p releases
-          echo "LIBCLANG_PATH=${LIBCLANG_PATH}"
-          echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
           for target in ${{ matrix.targets }}; do
-            cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
+            cross build --release --target $target --manifest-path=server/Cargo.toml || continue
             cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
           done
 
@@ -123,7 +97,7 @@ jobs:
           mkdir -p releases
           $targets = "${{ matrix.targets }}".Split(" ")
           foreach ($target in $targets) {
-            cargo build --release --target $target --manifest-path=server/Cargo.toml
+            cross build --release --target $target --manifest-path=server/Cargo.toml
             if ($?) {
               Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ env.version }}-$target.exe"
             }
