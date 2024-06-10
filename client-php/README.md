@@ -1,400 +1,199 @@
-# RocksDB Client for PHP
+Here is the `README.md` file with installation and usage instructions for your `rocksdb-client-php` package, including examples for both Laravel integration and direct usage.
 
-![Packagist Version](https://img.shields.io/packagist/v/your-username/rocksdb-client-php)
-![Packagist License](https://img.shields.io/packagist/l/your-username/rocksdb-client-php)
+```markdown
+# RocksDB Client PHP
 
-A PHP client for interacting with a RocksDB server. This package allows you to easily perform CRUD operations, manage column families, and handle transactions and backups with a RocksDB server over TCP.
+A PHP client for interacting with RocksDB server.
 
 ## Installation
 
 You can install the package via Composer:
 
 ```bash
-composer require your-username/rocksdb-client-php
+composer require s00d/rocksdb-client-php
 ```
 
-## Usage
+## Configuration
 
-Here's a quick example to get you started:
+### Laravel Integration
 
-```php
-require 'vendor/autoload.php';
+1. **Add the service provider**:
 
-use RocksDBClient\RocksDBClient;
+   In your `config/app.php` file, add the service provider to the `providers` array:
 
-$client = new RocksDBClient('127.0.0.1', 12345);
+   ```php
+   'providers' => [
+       // Other Service Providers
 
-// Put a key-value pair
-$client->put('key', 'value');
+       s00d\RocksDB\RocksDBServiceProvider::class,
+   ],
+   ```
 
-// Get a value by key
-$value = $client->get('key');
-echo "Value: $value\n";
+   And the alias to the `aliases` array:
 
-// Delete a key-value pair
-$client->delete('key');
-```
+   ```php
+   'aliases' => [
+       // Other Facades
+
+       'RocksDB' => s00d\RocksDB\Facades\RocksDB::class,
+   ],
+   ```
+
+2. **Publish the configuration file**:
+
+   ```bash
+   php artisan vendor:publish --provider="s00d\RocksDB\RocksDBServiceProvider"
+   ```
+
+   This will create a `config/rocksdb.php` configuration file where you can set the connection details.
+
+3. **Update your `.env` file**:
+
+   Add your RocksDB connection details to the `.env` file:
+
+   ```env
+   ROCKSDB_HOST=127.0.0.1
+   ROCKSDB_PORT=6379
+   ROCKSDB_TOKEN=null
+   ```
+
+4. **Usage**:
+
+   Now you can use the RocksDB client in your Laravel application:
+
+   ```php
+   use RocksDB;
+
+   // Put a value
+   RocksDB::put('key', 'value');
+
+   // Get a value
+   $value = RocksDB::get('key');
+
+   // Delete a key
+   RocksDB::delete('key');
+
+   // Other available methods...
+   ```
+
+### Direct Usage (Without Laravel)
+
+If you want to use the client without Laravel, you can directly instantiate the `RocksDBClient` class.
+
+1. **Create an instance**:
+
+   ```php
+   use s00d\RocksDB\RocksDBClient;
+
+   $client = new RocksDBClient('127.0.0.1', 6379);
+
+   // If you have a token
+   // $client = new RocksDBClient('127.0.0.1', 6379, 'your-token');
+   ```
+
+2. **Usage**:
+
+   ```php
+   // Put a value
+   $client->put('key', 'value');
+
+   // Get a value
+   $value = $client->get('key');
+
+   // Delete a key
+   $client->delete('key');
+
+   // Other available methods...
+   ```
 
 ## Methods
 
-### `put($key, $value, $cfName = null)`
+### put
 
-Inserts a key-value pair into the database.
+Stores a key-value pair in the database.
 
-**Parameters:**
-- `key` (string): The key to insert.
-- `value` (string): The value to insert.
-- `cfName` (string, optional): The column family name.
-
-**Example:**
 ```php
-$client->put('key', 'value');
+RocksDB::put('key', 'value', 'optional_column_family');
 ```
 
-### `get($key, $cfName = null)`
+### get
 
-Retrieves a value by key from the database.
+Retrieves the value of a key from the database.
 
-**Parameters:**
-- `key` (string): The key to retrieve.
-- `cfName` (string, optional): The column family name.
-
-**Returns:**
-- `string|null`: The value associated with the key, or `null` if the key does not exist.
-
-**Example:**
 ```php
-$value = $client->get('key');
+$value = RocksDB::get('key', 'optional_column_family', 'default_value');
 ```
 
-### `delete($key, $cfName = null)`
+### delete
 
-Deletes a key-value pair from the database.
+Deletes a key from the database.
 
-**Parameters:**
-- `key` (string): The key to delete.
-- `cfName` (string, optional): The column family name.
-
-**Example:**
 ```php
-$client->delete('key');
+RocksDB::delete('key', 'optional_column_family');
 ```
 
-### `merge($key, $value, $cfName = null)`
+### merge
 
-Merges a value with the existing value of a key.
+Merges a value with an existing key.
 
-**Parameters:**
-- `key` (string): The key to merge.
-- `value` (string): The value to merge.
-- `cfName` (string, optional): The column family name.
-
-**Example:**
 ```php
-$client->merge('key', 'new_value');
+RocksDB::merge('key', 'value', 'optional_column_family');
 ```
 
-### `listColumnFamilies($path)`
+### listColumnFamilies
 
-Lists all column families in the database at the specified path.
+Lists all column families in the database.
 
-**Parameters:**
-- `path` (string): The path to the database.
-
-**Returns:**
-- `array`: An array of column family names.
-
-**Example:**
 ```php
-$columnFamilies = $client->listColumnFamilies('/path/to/db');
+$columnFamilies = RocksDB::listColumnFamilies('path_to_db');
 ```
 
-### `createColumnFamily($cfName)`
+### createColumnFamily
 
-Creates a new column family in the database.
+Creates a new column family.
 
-**Parameters:**
-- `cfName` (string): The name of the column family to create.
-
-**Example:**
 ```php
-$client->createColumnFamily('new_cf');
+RocksDB::createColumnFamily('new_column_family');
 ```
 
-### `dropColumnFamily($cfName)`
+### dropColumnFamily
 
-Drops a column family from the database.
+Drops an existing column family.
 
-**Parameters:**
-- `cfName` (string): The name of the column family to drop.
-
-**Example:**
 ```php
-$client->dropColumnFamily('old_cf');
+RocksDB::dropColumnFamily('column_family');
 ```
 
-### `compactRange($start = null, $end = null, $cfName = null)`
+### compactRange
 
-Compacts the database within the specified key range and column family.
+Compacts the database within a range.
 
-**Parameters:**
-- `start` (string, optional): The start key of the range.
-- `end` (string, optional): The end key of the range.
-- `cfName` (string, optional): The column family name.
-
-**Example:**
 ```php
-$client->compactRange('start_key', 'end_key');
+RocksDB::compactRange('start_key', 'end_key', 'optional_column_family');
 ```
 
-### Transaction Methods
+### Transactions
 
-#### `beginTransaction()`
+#### Begin Transaction
 
 Begins a new transaction.
 
-**Example:**
 ```php
-$client->beginTransaction();
+$txnId = RocksDB::beginTransaction();
 ```
 
-#### `commitTransaction()`
+#### Commit Transaction
 
-Commits the current transaction.
+Commits a transaction.
 
-**Example:**
 ```php
-$client->commitTransaction();
+RocksDB::commitTransaction($txnId);
 ```
 
-#### `rollbackTransaction()`
+#### Rollback Transaction
 
-Rolls back the current transaction.
+Rolls back a transaction.
 
-**Example:**
 ```php
-$client->rollbackTransaction();
+RocksDB::rollbackTransaction($txnId);
 ```
-
-#### `setSavepoint()`
-
-Sets a savepoint in the current transaction.
-
-**Example:**
-```php
-$client->setSavepoint();
-```
-
-#### `rollbackToSavepoint()`
-
-Rolls back to the last savepoint in the current transaction.
-
-**Example:**
-```php
-$client->rollbackToSavepoint();
-```
-
-### Backup Methods
-
-#### `backupCreate()`
-
-Creates a new backup.
-
-**Example:**
-```php
-$client->backupCreate();
-```
-
-#### `backupInfo()`
-
-Retrieves information about existing backups.
-
-**Example:**
-```php
-$info = $client->backupInfo();
-print_r($info);
-```
-
-#### `backupPurgeOld($numBackupsToKeep)`
-
-Purges old backups, keeping only the specified number of recent backups.
-
-**Parameters:**
-- `numBackupsToKeep` (int): The number of backups to keep.
-
-**Example:**
-```php
-$client->backupPurgeOld(3);
-```
-
-#### `backupRestore($backupId, $restorePath)`
-
-Restores a backup to the specified path.
-
-**Parameters:**
-- `backupId` (int): The ID of the backup to restore.
-- `restorePath` (string): The path to restore the backup to.
-
-**Example:**
-```php
-$client->backupRestore(1, '/path/to/restore');
-```
-
-### Write Batch Methods
-
-#### `writeBatchPut($key, $value, $cfName = null)`
-
-Adds a put operation to the write batch.
-
-**Parameters:**
-- `key` (string): The key to put.
-- `value` (string): The value to put.
-- `cfName` (string, optional): The column family name.
-
-**Example:**
-```php
-$client->writeBatchPut('key', 'value');
-```
-
-#### `writeBatchMerge($key, $value, $cfName = null)`
-
-Adds a merge operation to the write batch.
-
-**Parameters:**
-- `key` (string): The key to merge.
-- `value` (string): The value to merge.
-- `cfName` (string, optional): The column family name.
-
-**Example:**
-```php
-$client->writeBatchMerge('key', 'new_value');
-```
-
-#### `writeBatchDelete($key, $cfName = null)`
-
-Adds a delete operation to the write batch.
-
-**Parameters:**
-- `key` (string): The key to delete.
-- `cfName` (string, optional): The column family name.
-
-**Example:**
-```php
-$client->writeBatchDelete('key');
-```
-
-#### `writeBatchWrite()`
-
-Writes all operations in the write batch to the database.
-
-**Example:**
-```php
-$client->writeBatchWrite();
-```
-
-#### `writeBatchClear()`
-
-Clears all operations in the write batch.
-
-**Example:**
-```php
-$client->writeBatchClear();
-```
-
-#### `writeBatchDestroy()`
-
-Destroys the write batch.
-
-**Example:**
-```php
-$client->writeBatchDestroy();
-```
-
-### Iterator Methods
-
-#### `createIterator()`
-
-Creates a new iterator.
-
-**Returns:**
-- `string`: The ID of the new iterator.
-
-**Example:**
-```php
-$iteratorId = $client->createIterator();
-```
-
-#### `destroyIterator($iteratorId)`
-
-Destroys the specified iterator.
-
-**Parameters:**
-- `iteratorId` (int): The ID of the iterator to destroy.
-
-**Example:**
-```php
-$client->destroyIterator($iteratorId);
-```
-
-#### `iteratorSeek($iteratorId, $key)`
-
-Seeks the specified iterator to the specified key.
-
-**Parameters:**
-- `iteratorId` (int): The ID of the iterator to seek.
-- `key` (string): The key to seek to.
-
-**Example:**
-```php
-$client->iteratorSeek($iteratorId, 'key');
-```
-
-#### `iteratorSeekForPrev($iteratorId, $key)`
-
-Seeks the specified iterator to the specified key or previous.
-
-**Parameters:**
-- `iteratorId` (int): The ID of the iterator to seek.
-- `key` (string): The key to seek to or previous.
-
-**Example:**
-```php
-$client->iteratorSeekForPrev($iteratorId, 'key');
-```
-
-#### `iteratorNext($iteratorId)`
-
-Moves the specified iterator to the next key.
-
-**Parameters:**
-- `iteratorId` (int): The ID of the iterator to move.
-
-**Returns:**
-- `bool`: `true` if the iterator was successfully moved, `false` otherwise.
-
-**Example:**
-```php
-$client->iteratorNext($iteratorId);
-```
-
-#### `iteratorPrev($iteratorId)`
-
-Moves the specified iterator to the previous key.
-
-**Parameters:**
-- `iteratorId` (int): The ID of the iterator to move.
-
-**Example:**
-```php
-$client->iteratorPrev($iteratorId);
-```
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit
-
-a pull request.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

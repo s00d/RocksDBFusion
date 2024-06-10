@@ -14,7 +14,7 @@ pub struct Request {
     pub cf_name: Option<String>,
     pub options: Option<HashMap<String, String>>,
     pub token: Option<String>,
-    pub txn_id: Option<usize>
+    pub txn_id: Option<usize>,
 }
 
 impl Request {
@@ -30,13 +30,13 @@ impl Request {
 pub struct Response {
     pub success: bool,
     pub result: Option<String>,
-    error: Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct RocksDBServer {
     db_manager: Arc<RocksDBManager>,
-    auth_token: Option<String>, // Добавлено поле для токена
+    auth_token: Option<String>,
 }
 
 impl RocksDBServer {
@@ -45,7 +45,7 @@ impl RocksDBServer {
         ttl_secs: Option<u64>,
         auth_token: Option<String>,
     ) -> Result<Self, String> {
-        let db_manager = Arc::new(RocksDBManager::new(&*db_path.clone(), ttl_secs.clone())?);
+        let db_manager = Arc::new(RocksDBManager::new(&db_path, ttl_secs)?);
 
         Ok(RocksDBServer {
             db_manager,
@@ -64,15 +64,15 @@ impl RocksDBServer {
                 }
                 Ok(_) => {
                     if let Some(position) = buffer.iter().position(|&b| b == b'\n') {
-                        let request_data = buffer[..position].to_vec(); // Копируем данные до позиции
-                        buffer = buffer.split_off(position + 1); // Оставляем только оставшуюся часть буфера
+                        let request_data = buffer[..position].to_vec(); // Copy data up to position
+                        buffer = buffer.split_off(position + 1); // Leave only the remaining part of the buffer
 
                         match serde_json::from_slice::<Request>(&request_data) {
                             Ok(request) => {
                                 debug!("Received request: {:?}", request);
                                 let response = self.handle_request(request).await;
                                 let mut response_bytes = serde_json::to_vec(&response).unwrap();
-                                response_bytes.push(b'\n'); // Добавляем '\n' в конец ответа
+                                response_bytes.push(b'\n'); // Add '\n' to the end of the response
 
                                 if let Err(e) = socket.write_all(&response_bytes).await {
                                     error!("Failed to send response: {}", e);
@@ -105,42 +105,42 @@ impl RocksDBServer {
         }
         debug!("Handling request action: {}", req.action);
         match req.action.as_str() {
-            "put" => self.handle_put(req.clone()).await,
-            "get" => self.handle_get(req.clone()).await,
-            "delete" => self.handle_delete(req.clone()).await,
-            "merge" => self.handle_merge(req.clone()).await,
-            "get_property" => self.handle_get_property(req.clone()).await,
-            "keys" => self.handle_get_keys(req.clone()).await,
-            "all" => self.handle_get_all(req.clone()).await,
-            "list_column_families" => self.handle_list_column_families(req.clone()).await,
-            "create_column_family" => self.handle_create_column_family(req.clone()).await,
-            "drop_column_family" => self.handle_drop_column_family(req.clone()).await,
-            "compact_range" => self.handle_compact_range(req.clone()).await,
-            "write_batch_put" => self.handle_write_batch_put(req.clone()).await,
-            "write_batch_merge" => self.handle_write_batch_merge(req.clone()).await,
-            "write_batch_delete" => self.handle_write_batch_delete(req.clone()).await,
+            "put" => self.handle_put(req).await,
+            "get" => self.handle_get(req).await,
+            "delete" => self.handle_delete(req).await,
+            "merge" => self.handle_merge(req).await,
+            "get_property" => self.handle_get_property(req).await,
+            "keys" => self.handle_get_keys(req).await,
+            "all" => self.handle_get_all(req).await,
+            "list_column_families" => self.handle_list_column_families(req).await,
+            "create_column_family" => self.handle_create_column_family(req).await,
+            "drop_column_family" => self.handle_drop_column_family(req).await,
+            "compact_range" => self.handle_compact_range(req).await,
+            "write_batch_put" => self.handle_write_batch_put(req).await,
+            "write_batch_merge" => self.handle_write_batch_merge(req).await,
+            "write_batch_delete" => self.handle_write_batch_delete(req).await,
             "write_batch_write" => self.handle_write_batch_write().await,
             "write_batch_clear" => self.handle_write_batch_clear().await,
             "write_batch_destroy" => self.handle_write_batch_destroy().await,
             "create_iterator" => self.handle_create_iterator().await,
-            "destroy_iterator" => self.handle_destroy_iterator(req.clone()).await,
+            "destroy_iterator" => self.handle_destroy_iterator(req).await,
             "iterator_seek" => {
-                self.handle_iterator_seek(req.clone(), rust_rocksdb::Direction::Forward)
+                self.handle_iterator_seek(req, rust_rocksdb::Direction::Forward)
                     .await
             }
             "iterator_seek_for_prev" => {
-                self.handle_iterator_seek(req.clone(), rust_rocksdb::Direction::Reverse)
+                self.handle_iterator_seek(req, rust_rocksdb::Direction::Reverse)
                     .await
             }
-            "iterator_next" => self.handle_iterator_next(req.clone()).await,
-            "iterator_prev" => self.handle_iterator_prev(req.clone()).await,
+            "iterator_next" => self.handle_iterator_next(req).await,
+            "iterator_prev" => self.handle_iterator_prev(req).await,
             "backup" => self.handle_backup().await,
             "restore_latest" => self.handle_restore_latest().await,
-            "restore" => self.handle_restore_request(req.clone()).await,
+            "restore" => self.handle_restore_request(req).await,
             "get_backup_info" => self.handle_get_backup_info().await,
             "begin_transaction" => self.handle_begin_transaction().await,
-            "commit_transaction" => self.handle_commit_transaction(req.clone()).await,
-            "rollback_transaction" => self.handle_rollback_transaction(req.clone()).await,
+            "commit_transaction" => self.handle_commit_transaction(req).await,
+            "rollback_transaction" => self.handle_rollback_transaction(req).await,
             _ => Response {
                 success: false,
                 result: None,
@@ -724,7 +724,6 @@ impl RocksDBServer {
         }
     }
 
-
     async fn handle_begin_transaction(&self) -> Response {
         debug!("handle_begin_transaction");
         match self.db_manager.begin_transaction() {
@@ -796,7 +795,5 @@ impl RocksDBServer {
                 error: Some("Missing txn_id".to_string()),
             },
         }
-
-
     }
 }

@@ -7,24 +7,22 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
-pub type DbInstance = Arc<Mutex<Option<DBWithThreadMode<MultiThreaded>>>>;
+pub type DbInstance = Arc<RwLock<Option<DBWithThreadMode<MultiThreaded>>>>;
 
 pub fn json_merge(
     _new_key: &[u8],
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,
 ) -> Option<Vec<u8>> {
-    // Decode the existing value
     let mut doc: Value = if let Some(val) = existing_val {
         serde_json::from_slice(val).unwrap_or(Value::Array(vec![]))
     } else {
         Value::Array(vec![])
     };
 
-    // Process each operand
     for op in operands {
         if let Ok(patch) = serde_json::from_slice::<Vec<PatchOperation>>(op) {
             let patch = Patch(patch);
@@ -36,7 +34,6 @@ pub fn json_merge(
         }
     }
 
-    // Serialize the updated JSON object back to bytes
     match serde_json::to_vec(&doc) {
         Ok(bytes) => Some(bytes),
         Err(e) => {
@@ -116,17 +113,17 @@ impl RocksDBManager {
                     cf_descriptors,
                     duration,
                 )
-                .map_err(|e| e.to_string())?
+                    .map_err(|e| e.to_string())?
             }
             None => DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
                 &opts,
                 db_path,
                 cf_descriptors,
             )
-            .map_err(|e| e.to_string())?,
+                .map_err(|e| e.to_string())?,
         };
 
-        let db = Arc::new(Mutex::new(Some(db)));
+        let db = Arc::new(RwLock::new(Some(db)));
 
         let iterators = Mutex::new(HashMap::new());
         let iterator_id_counter = AtomicUsize::new(0);
@@ -155,7 +152,7 @@ impl RocksDBManager {
         opts.set_max_open_files(1000);
         opts.set_log_level(rust_rocksdb::LogLevel::Warn);
 
-        let transaction_db = TransactionDB::open(&opts, &txn_db_opts, &self.db_path).map_err(|e| e)?;
+        let transaction_db = TransactionDB::open(&opts, &txn_db_opts, &self.db_path).map_err(|e| e.to_string())?;
 
         let transaction_db = Arc::new(transaction_db);
         let transaction = create_transaction(&transaction_db);
@@ -187,149 +184,137 @@ impl RocksDBManager {
 
     pub fn put(&self, key: String, value: String, cf_name: Option<String>, txn_id: Option<usize>) -> Result<(), String> {
         debug!("Putting key: {}, value: {}, cf_name: {:?}, txn_id: {:?}", key, value, cf_name, txn_id);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
+        if db.is_none() {
+            return Err("Database is not open".to_string());
+        }
+        let db = db.as_ref().unwrap();
         let mut transactions = self.transactions.lock().unwrap();
-        if let Some(ref db) = *db {
-            let result = match txn_id.and_then(|id| transactions.get_mut(&id)) {
-                Some(txn) => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            txn.put_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
-                        }
-                        None => txn.put(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-                    }
+
+        if let Some(txn_id) = txn_id {
+            let txn = transactions.get_mut(&txn_id).ok_or("Transaction ID not found")?;
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    txn.put_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
                 }
-                None => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            db.put_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
-                        }
-                        None => db.put(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-                    }
-                }
-            };
-            debug!("Put result: {:?}", result);
-            result
+                None => txn.put(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
+            }
         } else {
-            Err("Database is not open".to_string())
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    db.put_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
+                }
+                None => db.put(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
+            }
         }
     }
 
     pub fn get(&self, key: String, cf_name: Option<String>, default: Option<String>, txn_id: Option<usize>) -> Result<Option<String>, String> {
         debug!("Getting key: {}, cf_name: {:?}, default: {:?}, txn_id: {:?}", key, cf_name, default, txn_id);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
+        if db.is_none() {
+            return Err("Database is not open".to_string());
+        }
+        let db = db.as_ref().unwrap();
         let mut transactions = self.transactions.lock().unwrap();
-        if let Some(ref db) = *db {
-            let result = match txn_id.and_then(|id| transactions.get_mut(&id)) {
-                Some(txn) => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            match txn.get_cf(&cf, key.as_bytes()) {
-                                Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
-                                Ok(None) => Ok(default), // Если значение не найдено, возвращаем значение по умолчанию
-                                Err(e) => Err(e.to_string()),
-                            }
-                        }
-                        None => {
-                            match txn.get(key.as_bytes()) {
-                                Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
-                                Ok(None) => Ok(default), // Если значение не найдено, возвращаем значение по умолчанию
-                                Err(e) => Err(e.to_string()),
-                            }
-                        }
+
+        if let Some(txn_id) = txn_id {
+            let txn = transactions.get_mut(&txn_id).ok_or("Transaction ID not found")?;
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    match txn.get_cf(&cf, key.as_bytes()) {
+                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
+                        Ok(None) => Ok(default),
+                        Err(e) => Err(e.to_string()),
                     }
                 }
                 None => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            match db.get_cf(&cf, key.as_bytes()) {
-                                Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
-                                Ok(None) => Ok(default), // Если значение не найдено, возвращаем значение по умолчанию
-                                Err(e) => Err(e.to_string()),
-                            }
-                        }
-                        None => {
-                            match db.get(key.as_bytes()) {
-                                Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
-                                Ok(None) => Ok(default), // Если значение не найдено, возвращаем значение по умолчанию
-                                Err(e) => Err(e.to_string()),
-                            }
-                        }
+                    match txn.get(key.as_bytes()) {
+                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
+                        Ok(None) => Ok(default),
+                        Err(e) => Err(e.to_string()),
                     }
                 }
-            };
-            debug!("Get result: {:?}", result);
-            result
+            }
         } else {
-            Err("Database is not open".to_string())
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    match db.get_cf(&cf, key.as_bytes()) {
+                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
+                        Ok(None) => Ok(default),
+                        Err(e) => Err(e.to_string()),
+                    }
+                }
+                None => {
+                    match db.get(key.as_bytes()) {
+                        Ok(Some(value)) => Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?)),
+                        Ok(None) => Ok(default),
+                        Err(e) => Err(e.to_string()),
+                    }
+                }
+            }
         }
     }
 
     pub fn delete(&self, key: String, cf_name: Option<String>, txn_id: Option<usize>) -> Result<(), String> {
         debug!("Deleting key: {}, cf_name: {:?}, txn_id: {:?}", key, cf_name, txn_id);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
+        if db.is_none() {
+            return Err("Database is not open".to_string());
+        }
+        let db = db.as_ref().unwrap();
         let mut transactions = self.transactions.lock().unwrap();
-        if let Some(ref db) = *db {
-            let result = match txn_id.and_then(|id| transactions.get_mut(&id)) {
-                Some(txn) => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            txn.delete_cf(&cf, key.as_bytes()).map_err(|e| e.to_string())
-                        }
-                        None => txn.delete(key.as_bytes()).map_err(|e| e.to_string()),
-                    }
+
+        if let Some(txn_id) = txn_id {
+            let txn = transactions.get_mut(&txn_id).ok_or("Transaction ID not found")?;
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    txn.delete_cf(&cf, key.as_bytes()).map_err(|e| e.to_string())
                 }
-                None => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            db.delete_cf(&cf, key.as_bytes()).map_err(|e| e.to_string())
-                        }
-                        None => db.delete(key.as_bytes()).map_err(|e| e.to_string()),
-                    }
-                }
-            };
-            debug!("Delete result: {:?}", result);
-            result
+                None => txn.delete(key.as_bytes()).map_err(|e| e.to_string()),
+            }
         } else {
-            Err("Database is not open".to_string())
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    db.delete_cf(&cf, key.as_bytes()).map_err(|e| e.to_string())
+                }
+                None => db.delete(key.as_bytes()).map_err(|e| e.to_string()),
+            }
         }
     }
 
     pub fn merge(&self, key: String, value: String, cf_name: Option<String>, txn_id: Option<usize>) -> Result<(), String> {
         debug!("Merging key: {}, value: {}, cf_name: {:?}, txn_id: {:?}", key, value, cf_name, txn_id);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
+        if db.is_none() {
+            return Err("Database is not open".to_string());
+        }
+        let db = db.as_ref().unwrap();
         let mut transactions = self.transactions.lock().unwrap();
-        if let Some(ref db) = *db {
-            let result = match txn_id.and_then(|id| transactions.get_mut(&id)) {
-                Some(txn) => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            txn.merge_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
-                        }
-                        None => txn.merge(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-                    }
+
+        if let Some(txn_id) = txn_id {
+            let txn = transactions.get_mut(&txn_id).ok_or("Transaction ID not found")?;
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    txn.merge_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
                 }
-                None => {
-                    match cf_name {
-                        Some(cf_name) => {
-                            let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                            db.merge_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
-                        }
-                        None => db.merge(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
-                    }
-                }
-            };
-            debug!("Merge result: {:?}", result);
-            result
+                None => txn.merge(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
+            }
         } else {
-            Err("Database is not open".to_string())
+            match cf_name {
+                Some(cf_name) => {
+                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    db.merge_cf(&cf, key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string())
+                }
+                None => db.merge(key.as_bytes(), value.as_bytes()).map_err(|e| e.to_string()),
+            }
         }
     }
 
@@ -339,7 +324,7 @@ impl RocksDBManager {
         cf_name: Option<String>,
     ) -> Result<Option<String>, String> {
         debug!("get property with id: {}, cf_name: {:?}", property, cf_name);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         if let Some(ref db) = *db {
             match cf_name {
                 Some(cf_name) => {
@@ -363,7 +348,7 @@ impl RocksDBManager {
 
     pub fn get_all(&self, query: Option<String>) -> Result<Vec<String>, String> {
         debug!("Get all keys with query: {:?}", query);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         if let Some(ref db) = *db {
             let iter = db.iterator(rust_rocksdb::IteratorMode::Start);
 
@@ -411,7 +396,7 @@ impl RocksDBManager {
 
     pub fn close(&self) -> Result<(), String> {
         info!("Closing database");
-        let mut db_lock = self.db.lock().unwrap();
+        let mut db_lock = self.db.write().unwrap();
         *db_lock = None;
         Ok(())
     }
@@ -439,8 +424,8 @@ impl RocksDBManager {
             &self.db_path,
             cf_descriptors,
         )
-        .map_err(|e| e.to_string())?;
-        let mut db_lock = self.db.lock().unwrap();
+            .map_err(|e| e.to_string())?;
+        let mut db_lock = self.db.write().unwrap();
         *db_lock = Some(new_db);
 
         info!("Database reopened successfully");
@@ -467,7 +452,7 @@ impl RocksDBManager {
 
     pub fn create_column_family(&self, cf_name: String) -> Result<(), String> {
         info!("Creating column family: {}", cf_name);
-        let mut db = self.db.lock().unwrap();
+        let mut db = self.db.write().unwrap();
         if let Some(ref mut db) = *db {
             let cf_exists = db.cf_handle(&cf_name).is_some();
             let result = if cf_exists {
@@ -486,7 +471,7 @@ impl RocksDBManager {
 
     pub fn drop_column_family(&self, cf_name: String) -> Result<(), String> {
         info!("Dropping column family: {}", cf_name);
-        let mut db = self.db.lock().unwrap();
+        let mut db = self.db.write().unwrap();
         if let Some(ref mut db) = *db {
             let cf_exists = db.cf_handle(&cf_name).is_some();
             let result = if !cf_exists {
@@ -511,7 +496,7 @@ impl RocksDBManager {
             "Compacting range with start: {:?}, end: {:?}, cf_name: {:?}",
             start, end, cf_name
         );
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         if let Some(ref db) = *db {
             let result = match cf_name {
                 Some(cf_name) => {
@@ -541,7 +526,7 @@ impl RocksDBManager {
             "Write batch put with key: {}, value: {}, cf_name: {:?}",
             key, value, cf_name
         );
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
             let result = if let Some(ref mut wb) = *batch {
@@ -575,7 +560,7 @@ impl RocksDBManager {
             "Write batch merge with key: {}, value: {}, cf_name: {:?}",
             key, value, cf_name
         );
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
             let result = if let Some(ref mut wb) = *batch {
@@ -604,7 +589,7 @@ impl RocksDBManager {
             "Write batch delete with key: {}, cf_name: {:?}",
             key, cf_name
         );
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
             let result = if let Some(ref mut wb) = *batch {
@@ -630,7 +615,7 @@ impl RocksDBManager {
 
     pub fn write_batch_write(&self) -> Result<(), String> {
         debug!("Write batch write");
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         let mut batch = self.write_batch.lock().unwrap();
         if let Some(ref db) = *db {
             let result = if let Some(wb) = batch.take() {
@@ -703,7 +688,7 @@ impl RocksDBManager {
                 );
             }
         }
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         if let Some(ref db) = *db {
             let mut iterators = self.iterators.lock().unwrap();
             if let Some(iterator) = iterators.get_mut(&iterator_id) {
@@ -728,7 +713,7 @@ impl RocksDBManager {
 
     pub fn iterator_next(&self, iterator_id: usize) -> Result<String, String> {
         debug!("Iterator next with id: {}", iterator_id);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         let mut iterators = self.iterators.lock().unwrap();
         if let Some(ref db) = *db {
             if let Some(iterator) = iterators.get_mut(&iterator_id) {
@@ -757,7 +742,7 @@ impl RocksDBManager {
 
     pub fn iterator_prev(&self, iterator_id: usize) -> Result<String, String> {
         debug!("Iterator prev with id: {}", iterator_id);
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         if let Some(ref db) = *db {
             let mut iterators = self.iterators.lock().unwrap();
             if let Some(iterator) = iterators.get_mut(&iterator_id) {
@@ -795,7 +780,7 @@ impl RocksDBManager {
             BackupEngine::open(&backup_opts, &Env::new().map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.read().unwrap();
         if let Some(ref db) = *db {
             let result = backup_engine
                 .create_new_backup(db)
@@ -881,9 +866,9 @@ mod tests {
     fn test_put_and_get() {
         let manager = setup_db(".temp/test_put_and_get");
         manager
-            .put("key1".to_string(), "value1".to_string(), None)
+            .put("key1".to_string(), "value1".to_string(), None, None)
             .unwrap();
-        let result = manager.get("key1".to_string(), None, None).unwrap();
+        let result = manager.get("key1".to_string(), None, None, None).unwrap();
         assert_eq!(result, Some("value1".to_string()));
     }
 
@@ -891,10 +876,10 @@ mod tests {
     fn test_delete() {
         let manager = setup_db(".temp/test_delete");
         manager
-            .put("key1".to_string(), "value1".to_string(), None)
+            .put("key1".to_string(), "value1".to_string(), None, None)
             .unwrap();
-        manager.delete("key1".to_string(), None).unwrap();
-        let result = manager.get("key1".to_string(), None, None).unwrap();
+        manager.delete("key1".to_string(), None, None).unwrap();
+        let result = manager.get("key1".to_string(), None, None, None).unwrap();
         assert_eq!(result, None);
     }
 
@@ -906,6 +891,7 @@ mod tests {
                 "key1".to_string(),
                 r#"{"field": "value1"}"#.to_string(),
                 None,
+                None,
             )
             .unwrap();
         manager
@@ -913,9 +899,10 @@ mod tests {
                 "key1".to_string(),
                 r#"{"field": "value2"}"#.to_string(),
                 None,
+                None,
             )
             .unwrap();
-        let result = manager.get("key1".to_string(), None, None).unwrap();
+        let result = manager.get("key1".to_string(), None, None, None).unwrap();
         assert_eq!(result, Some(r#"{"field":"value2"}"#.to_string()));
     }
 
@@ -953,10 +940,10 @@ mod tests {
     fn test_compact_range() {
         let manager = setup_db(".temp/test_compact_range");
         manager
-            .put("key1".to_string(), "value1".to_string(), None)
+            .put("key1".to_string(), "value1".to_string(), None, None)
             .unwrap();
         manager
-            .put("key2".to_string(), "value2".to_string(), None)
+            .put("key2".to_string(), "value2".to_string(), None, None)
             .unwrap();
         manager
             .compact_range(Some("key1".to_string()), Some("key2".to_string()), None)
@@ -976,7 +963,7 @@ mod tests {
             .write_batch_delete("key1".to_string(), None)
             .unwrap();
         manager.write_batch_write().unwrap();
-        let result = manager.get("key1".to_string(), None, None).unwrap();
+        let result = manager.get("key1".to_string(), None, None, None).unwrap();
         assert_eq!(result, None);
     }
 
@@ -988,7 +975,7 @@ mod tests {
             .unwrap();
         manager.write_batch_clear().unwrap();
         manager.write_batch_write().unwrap();
-        let result = manager.get("key1".to_string(), None, None).unwrap();
+        let result = manager.get("key1".to_string(), None, None, None).unwrap();
         assert_eq!(result, None);
         manager.write_batch_destroy().unwrap();
     }

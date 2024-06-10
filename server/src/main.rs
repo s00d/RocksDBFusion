@@ -1,8 +1,8 @@
 pub mod db_manager;
-mod heplers;
+mod helpers;
 pub mod server;
 
-use crate::heplers::{LockFileGuard, LogLevel};
+use crate::helpers::{LockFileGuard, LogLevel};
 use env_logger::{Builder, Target};
 use log::{info, LevelFilter};
 use server::RocksDBServer;
@@ -77,9 +77,15 @@ async fn main() -> io::Result<()> {
 
     let addr = format!("{}:{}", host, port);
 
-    let server = RocksDBServer::new(dbpath.clone(), ttl, token).unwrap();
+    let server = RocksDBServer::new(dbpath.clone(), ttl, token).map_err(|e| {
+        log::error!("Failed to create RocksDBServer: {}", e);
+        io::Error::new(io::ErrorKind::Other, "Failed to create RocksDBServer")
+    })?;
 
-    let listener = TcpListener::bind(&addr).await.unwrap();
+    let listener = TcpListener::bind(&addr).await.map_err(|e| {
+        log::error!("Failed to bind to address {}: {}", addr, e);
+        io::Error::new(io::ErrorKind::AddrInUse, "Failed to bind to address")
+    })?;
     info!("Server listening on {}", addr);
 
     tokio::spawn(async move {
@@ -93,6 +99,7 @@ async fn main() -> io::Result<()> {
 
     // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
+    info!("Shutdown signal received, terminating...");
 
     Ok(())
 }
