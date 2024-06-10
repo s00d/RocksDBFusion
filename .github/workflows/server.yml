@@ -18,11 +18,16 @@ jobs:
       TARGETS_MAC: x86_64-apple-darwin aarch64-apple-darwin
       TARGETS_WINDOWS: x86_64-pc-windows-msvc x86_64-pc-windows-gnu i686-pc-windows-msvc
 
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup LLVM & Clang
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: 16
@@ -30,12 +35,14 @@ jobs:
           cached: true
 
       - name: Configure Clang
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
           echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-16/lib" >> $GITHUB_ENV
           echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
           echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
 
       - name: Install osxcross toolchain
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y curl make gcc
@@ -55,9 +62,19 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
           rustup default stable
-          for target in $TARGETS_LINUX $TARGETS_MAC $TARGETS_WINDOWS; do
-            rustup target add $target
-          done
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            for target in $TARGETS_LINUX; do
+              rustup target add $target
+            done
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            for target in $TARGETS_MAC; do
+              rustup target add $target
+            done
+          elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+            for target in $TARGETS_WINDOWS; do
+              rustup target add $target
+            done
+          fi
 
       - name: Get version
         id: version
@@ -66,18 +83,26 @@ jobs:
       - name: Build and Release
         run: |
           mkdir -p releases
-          for target in $TARGETS_LINUX $TARGETS_MAC $TARGETS_WINDOWS; do
-            if [[ "$target" == *"darwin"* ]]; then
-              export CC=o64-clang
-              export CXX=o64-clang++
-            fi
-            cargo build --release --target $target --manifest-path=server/Cargo.toml
-            if [[ "$target" == *"windows"* ]]; then
-              cp target/$target/release/server.exe releases/server-${{ steps.version.outputs.version }}-$target.exe
-            else
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            for target in $TARGETS_LINUX; do
+              if [[ "$target" == *"darwin"* ]]; then
+                export CC=o64-clang
+                export CXX=o64-clang++
+              fi
+              cargo build --release --target $target --manifest-path=server/Cargo.toml
               cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
-            fi
-          done
+            done
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            for target in $TARGETS_MAC; do
+              cargo build --release --target $target --manifest-path=server/Cargo.toml
+              cp target/$target/release/server releases/server-${{ steps.version.outputs.version }}-$target
+            done
+          elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+            for target in $TARGETS_WINDOWS; do
+              cargo build --release --target $target --manifest-path=server/Cargo.toml
+              cp target/$target/release/server.exe releases/server-${{ steps.version.outputs.version }}-$target.exe
+            done
+          fi
 
       - name: Create GitHub Release
         id: create_release
