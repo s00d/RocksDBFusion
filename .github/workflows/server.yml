@@ -44,7 +44,7 @@ jobs:
           wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
           tar -xf MacOSX11.3.sdk.tar.xz
           mv MacOSX11.3.sdk tarballs/
-          SDK_VERSION=11.3 OSX_VERSION_MIN=11.0 ./build.sh
+          SDK_VERSION=11.3 OSX_VERSION_MIN=11.0 ./build.sh V=1
           echo "CC=/home/runner/work/osxcross/target/bin/o64-clang" >> $GITHUB_ENV
           echo "CXX=/home/runner/work/osxcross/target/bin/o64-clang++" >> $GITHUB_ENV
           echo "PATH=/home/runner/work/osxcross/target/bin:$PATH" >> $GITHUB_ENV
