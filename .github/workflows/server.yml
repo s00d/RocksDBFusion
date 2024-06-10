@@ -121,6 +121,7 @@ jobs:
           $version = (Get-Content server\Cargo.toml | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }).Trim()
           Add-Content -Path $env:GITHUB_ENV -Value ("version=$version")
 
+\
       - name: Build and Release on Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
