@@ -19,7 +19,7 @@ jobs:
         #        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
-            targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu i586-unknown-linux-gnu powerpc-unknown-linux-gnu
+            targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu i586-unknown-linux-gnu powerpc-unknown-linux-gnu armv7-unknown-linux-gnueabihf arm-unknown-linux-gnueabihf
           #          - os: macos-latest
           #            targets: x86_64-apple-darwin aarch64-apple-darwin
 #          - os: windows-latest
@@ -58,20 +58,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Setup LLVM & Clang on Linux
-        if: matrix.os == 'ubuntu-latest'
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: 16
-          directory: ${{ runner.temp }}/llvm-16
-          cached: true
-
-      - name: Configure Clang on Linux
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-16/lib" >> $GITHUB_ENV
-          echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
-          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
+#      - name: Setup LLVM & Clang on Linux
+#        if: matrix.os == 'ubuntu-latest'
+#        uses: KyleMayes/install-llvm-action@v2
+#        with:
+#          version: 16
+#          directory: ${{ runner.temp }}/llvm-16
+#          cached: true
+#
+#      - name: Configure Clang on Linux
+#        if: matrix.os == 'ubuntu-latest'
+#        run: |
+#          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-16/lib" >> $GITHUB_ENV
+#          echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
+#          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
 
       - name: Install Rust toolchain on Linux and macOS
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
