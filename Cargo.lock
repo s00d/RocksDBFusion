@@ -1281,6 +1281,7 @@ dependencies = [
  "fs2",
  "futures",
  "json-patch",
+ "libc",
  "log",
  "rust-rocksdb",
  "serde",
