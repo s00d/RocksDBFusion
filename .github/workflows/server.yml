@@ -28,20 +28,54 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup LLVM & Clang
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      - name: Setup dependencies on Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu
+
+      - name: Setup LLVM & Clang on Linux
+        if: matrix.os == 'ubuntu-latest'
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: 16
           directory: ${{ runner.temp }}/llvm-16
           cached: true
 
-      - name: Configure Clang
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      - name: Setup LLVM & Clang on macOS
+        if: matrix.os == 'macos-latest'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: 16
+
+      - name: Configure Clang on Linux
+        if: matrix.os == 'ubuntu-latest'
         run: |
           echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-16/lib" >> $GITHUB_ENV
           echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
           echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
+
+      - name: Configure Clang on macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm-16/lib" >> $GITHUB_ENV
+          echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
+          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
+
+      - name: Setup osxcross toolchain on macOS for macOS targets
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install llvm
+          git clone https://github.com/tpoechtrager/osxcross.git
+          cd osxcross
+          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
+          tar -xf MacOSX11.3.sdk.tar.xz
+          mv MacOSX11.3.sdk tarballs/
+          SDK_VERSION=11.3 OSX_VERSION_MIN=11.0 ./build.sh
+          cd ..
+          echo "CC=$(pwd)/osxcross/target/bin/o64-clang" >> $GITHUB_ENV
+          echo "CXX=$(pwd)/osxcross/target/bin/o64-clang++" >> $GITHUB_ENV
+          echo "PATH=$(pwd)/osxcross/target/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install Rust toolchain on Linux and macOS
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
