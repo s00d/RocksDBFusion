@@ -35,6 +35,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi libc6-dev-armel-cross
 
+      - name: Set LIBCLANG_PATH
+        if: matrix.os == 'ubuntu-latest'
+        run: echo "LIBCLANG_PATH=/usr/lib/llvm-10/lib" >> $GITHUB_ENV
 
       - uses: actions/cache@v4
         with:
@@ -45,9 +48,57 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ matrix.os }}-cargo-${{ matrix.targets }}
-          enableCrossOsArchive: true
           restore-keys: |
             ${{ matrix.os }}-cargo-
+
+      - name: Setup cache on Windows
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\Users\runneradmin\.cargo\registry\index\
+            C:\Users\runneradmin\.cargo\registry\cache\
+            C:\Users\runneradmin\.cargo\git\db\
+            target\
+          key: ${{ runner.os }}-cargo
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+          Start-Process -FilePath .\rustup-init.exe -ArgumentList '-y' -NoNewWindow -Wait
+          $env:Path += ';C:\Users\runneradmin\.cargo\bin'
+          $targets = "${{ matrix.targets }}".Split(" ")
+          foreach ($target in $targets) {
+            rustup target add $target
+          }
+
+      - name: Setup LLVM & Clang for x64 on Linux
+        if: matrix.os == 'ubuntu-latest' && contains(matrix.targets, 'x86_64')
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: 16
+          directory: ${{ runner.temp }}/llvm-x64
+          arch: x64
+        env:
+          LIBCLANG_PATH: ${{ runner.temp }}/llvm-x64/lib
+          LLVM_VERSION: 16
+          LLVM_CONFIG_PATH: ${{ runner.temp }}/llvm-x64/bin/llvm-config
+
+      - name: Setup LLVM & Clang for arm64 on Linux
+        if: matrix.os == 'ubuntu-latest' && contains(matrix.targets, 'aarch64')
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: 16
+          directory: ${{ runner.temp }}/llvm-arm64
+          arch: arm64
+        env:
+          LIBCLANG_PATH: ${{ runner.temp }}/llvm-arm64/lib
+          LLVM_VERSION: 16
+          LLVM_CONFIG_PATH: ${{ runner.temp }}/llvm-arm64/bin/llvm-config
 
       - name: Install Rust toolchain on Linux and macOS
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
@@ -58,9 +109,6 @@ jobs:
           for target in ${{ matrix.targets }}; do
             rustup target add $target
           done
-
-      - name: Install cross
-        run: cargo install cross
 
       - name: Get version
         id: version
@@ -78,16 +126,28 @@ jobs:
         run: |
           mkdir -p releases
           for target in ${{ matrix.targets }}; do
-            cross build --release --target $target --manifest-path=server/Cargo.toml || continue
+            if [[ $target == *"x86_64"* ]]; then
+              echo "Installing LLVM & Clang for x86_64"
+              curl -SL https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.0/clang+llvm-16.0.0-x86_64-linux-gnu-ubuntu-18.04.tar.xz | tar -xJf - -C /tmp/
+              export LIBCLANG_PATH=/tmp/clang+llvm-16.0.0-x86_64-linux-gnu-ubuntu-18.04/lib
+            elif [[ $target == *"aarch64"* ]]; then
+              echo "Installing LLVM & Clang for aarch64"
+              curl -SL https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.0/clang+llvm-16.0.0-aarch64-linux-gnu.tar.xz | tar -xJf - -C /tmp/
+              export LIBCLANG_PATH=/tmp/clang+llvm-16.0.0-aarch64-linux-gnu/lib
+            fi
+            cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
             cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
           done
+    
 
       - name: Build and Release on macOS
         if: matrix.os == 'macos-latest'
         run: |
           mkdir -p releases
+          echo "LIBCLANG_PATH=${LIBCLANG_PATH}"
+          echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
           for target in ${{ matrix.targets }}; do
-            cross build --release --target $target --manifest-path=server/Cargo.toml || continue
+            cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
             cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
           done
 
@@ -97,7 +157,7 @@ jobs:
           mkdir -p releases
           $targets = "${{ matrix.targets }}".Split(" ")
           foreach ($target in $targets) {
-            cross build --release --target $target --manifest-path=server/Cargo.toml
+            cargo build --release --target $target --manifest-path=server/Cargo.toml
             if ($?) {
               Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ env.version }}-$target.exe"
             }
