@@ -1,9 +1,7 @@
-use fs2::FileExt;
+use file_lock::{FileLock, FileOptions};
 use log::LevelFilter;
-use std::fs::File;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 use tokio::io;
 
 #[derive(Debug)]
@@ -41,15 +39,17 @@ impl Into<LevelFilter> for LogLevel {
 
 pub struct LockFileGuard {
     path: PathBuf,
-    _file: Arc<File>,
+    _file: FileLock,
 }
 
 impl LockFileGuard {
-    pub(crate) fn new(path: PathBuf, file: File) -> io::Result<Self> {
-        file.lock_exclusive()?;
+    pub(crate) fn new(path: PathBuf) -> io::Result<Self> {
+        let options = FileOptions::new().write(true).create(true).append(false);
+        let lock = FileLock::lock(path.to_str().unwrap(), true, options)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         Ok(Self {
             path,
-            _file: Arc::new(file),
+            _file: lock,
         })
     }
 }
@@ -64,3 +64,4 @@ impl Drop for LockFileGuard {
         }
     }
 }
+

@@ -16,14 +16,14 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        #        os: [ubuntu-latest, macos-latest, windows-latest]
+#        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
-    #          - os: macos-latest
-    #            targets: x86_64-apple-darwin aarch64-apple-darwin
-    #          - os: windows-latest
-    #            targets: x86_64-pc-windows-msvc x86_64-pc-windows-gnu i686-pc-windows-msvc
+#          - os: macos-latest
+#            targets: x86_64-apple-darwin aarch64-apple-darwin
+#          - os: windows-latest
+#            targets: x86_64-pc-windows-msvc x86_64-pc-windows-gnu i686-pc-windows-msvc
 
     steps:
       - name: Checkout repository
@@ -76,30 +76,6 @@ jobs:
             rustup target add $target
           }
 
-      - name: Setup LLVM & Clang for x64 on Linux
-        if: matrix.os == 'ubuntu-latest' && contains(matrix.targets, 'x86_64')
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: 16
-          directory: ${{ runner.temp }}/llvm-x64
-          arch: x64
-        env:
-          LIBCLANG_PATH: ${{ runner.temp }}/llvm-x64/lib
-          LLVM_VERSION: 16
-          LLVM_CONFIG_PATH: ${{ runner.temp }}/llvm-x64/bin/llvm-config
-
-      - name: Setup LLVM & Clang for arm64 on Linux
-        if: matrix.os == 'ubuntu-latest' && contains(matrix.targets, 'aarch64')
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: 16
-          directory: ${{ runner.temp }}/llvm-arm64
-          arch: arm64
-        env:
-          LIBCLANG_PATH: ${{ runner.temp }}/llvm-arm64/lib
-          LLVM_VERSION: 16
-          LLVM_CONFIG_PATH: ${{ runner.temp }}/llvm-arm64/bin/llvm-config
-
       - name: Install Rust toolchain on Linux and macOS
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
@@ -121,25 +97,14 @@ jobs:
           $version = (Get-Content server\Cargo.toml | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }).Trim()
           Add-Content -Path $env:GITHUB_ENV -Value ("version=$version")
 
-
       - name: Build and Release on Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
           mkdir -p releases
           for target in ${{ matrix.targets }}; do
-            if [[ $target == *"x86_64"* ]]; then
-              echo "Installing LLVM & Clang for x86_64"
-              curl -SL https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.0/clang+llvm-16.0.0-x86_64-linux-gnu-ubuntu-18.04.tar.xz | tar -xJf - -C /tmp/
-              export LIBCLANG_PATH=/tmp/clang+llvm-16.0.0-x86_64-linux-gnu-ubuntu-18.04/lib
-            elif [[ $target == *"aarch64"* ]]; then
-              echo "Installing LLVM & Clang for aarch64"
-              curl -SL https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.0/clang+llvm-16.0.0-aarch64-linux-gnu.tar.xz | tar -xJf - -C /tmp/
-              export LIBCLANG_PATH=/tmp/clang+llvm-16.0.0-aarch64-linux-gnu/lib
-            fi
             cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
             cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
           done
-    
 
       - name: Build and Release on macOS
         if: matrix.os == 'macos-latest'

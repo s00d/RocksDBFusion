@@ -7,7 +7,6 @@ use env_logger::{Builder, Target};
 use log::{info, LevelFilter};
 use server::RocksDBServer;
 use std::env;
-use std::fs::File;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tokio::io;
@@ -62,8 +61,7 @@ async fn main() -> io::Result<()> {
     let token = opt.token;
 
     let _lock_guard = if let Some(lock_file_path) = opt.lock_file {
-        let file = File::create(&lock_file_path)?;
-        Some(LockFileGuard::new(lock_file_path, file)?)
+        Some(LockFileGuard::new(lock_file_path)?)
     } else {
         None
     };
