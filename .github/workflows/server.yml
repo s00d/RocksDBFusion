@@ -124,7 +124,7 @@ jobs:
       - name: Upload Release Assets
         run: |
           for file in releases/*; do
-            gh release upload ${{ steps.create_release.outputs.tag_name }} "$file" --clobber
+            gh release upload server-v${{ steps.version.outputs.version }} "$file" --clobber
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
