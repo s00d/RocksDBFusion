@@ -74,14 +74,14 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo ::set-output name=version::$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+        run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
 
       - name: Get version on Windows
         id: version_windows
         if: matrix.os == 'windows-latest'
         run: |
           $version = (Get-Content server\Cargo.toml | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }).Trim()
-          echo "::set-output name=version::$version"
+          Add-Content -Path $env:GITHUB_ENV -Value ("version=$version")
 
       - name: Build and Release on Linux and macOS
         if: matrix.os == 'ubuntu-latest'
@@ -91,7 +91,7 @@ jobs:
           mkdir -p releases
           for target in ${{ matrix.targets }}; do
             cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
-            cp target/$target/release/rocksdb_server releases/server-${{ steps.version.outputs.version }}-$target
+            cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
           done
 
       - name: Build and Release on macOS
@@ -102,7 +102,7 @@ jobs:
           echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
           for target in ${{ matrix.targets }}; do
             cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
-            cp target/$target/release/rocksdb_server releases/server-${{ steps.version.outputs.version }}-$target
+            cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
           done
 
       - name: Build and Release on Windows
@@ -113,7 +113,7 @@ jobs:
           foreach ($target in $targets) {
             cargo build --release --target $target --manifest-path=server/Cargo.toml
             if ($?) {
-              Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ steps.version_windows.outputs.version }}-$target.exe"
+              Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ env.version }}-$target.exe"
             }
           }
 
@@ -121,8 +121,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: server-v${{ steps.version.outputs.version || steps.version_windows.outputs.version }}
-          name: Server Release ${{ steps.version.outputs.version || steps.version_windows.outputs.version }}
+          tag_name: server-v${{ env.version }}
+          name: Server Release ${{ env.version }}
           draft: false
           prerelease: false
         env:
@@ -132,7 +132,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           for file in releases/*; do
-            gh release upload server-v${{ steps.version.outputs.version }} "$file" --clobber
+            gh release upload server-v${{ env.version }} "$file" --clobber
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -142,7 +142,7 @@ jobs:
         run: |
           $files = Get-ChildItem -Path releases
           foreach ($file in $files) {
-            gh release upload server-v${{ steps.version_windows.outputs.version }} $file.FullName --clobber
+            gh release upload server-v${{ env.version }} $file.FullName --clobber
           }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
