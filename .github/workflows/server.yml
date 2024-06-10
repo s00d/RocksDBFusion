@@ -34,7 +34,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+          sudo apt-get install -y libclang-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi libc6-dev-armel-cross
 
       - name: Set LIBCLANG_PATH
         if: matrix.os == 'ubuntu-latest'
