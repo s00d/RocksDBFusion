@@ -43,7 +43,8 @@ jobs:
           echo "LLVM_VERSION=${{ steps.clang.outputs.version }}" >> $GITHUB_ENV
           echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm-16/bin/llvm-config" >> $GITHUB_ENV
 
-      - name: Install latest Rust toolchain
+      - name: Install Rust toolchain on Linux and macOS
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
@@ -51,6 +52,18 @@ jobs:
           for target in ${{ matrix.targets }}; do
             rustup target add $target
           done
+
+      - name: Install Rust toolchain on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init.exe
+          .\rustup-init.exe -y
+          $Env:Path += ";$Env:USERPROFILE\.cargo\bin"
+          rustup default stable
+          $targets = "${{ matrix.targets }}".Split(" ")
+          foreach ($target in $targets) {
+            rustup target add $target
+          }
 
       - name: Get version
         id: version
