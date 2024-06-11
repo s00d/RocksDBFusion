@@ -1276,10 +1276,8 @@ dependencies = [
 name = "rocksdb_server"
 version = "0.1.0"
 dependencies = [
- "bytes",
  "env_logger",
  "file-lock",
- "futures",
  "json-patch",
  "log",
  "rust-rocksdb",
