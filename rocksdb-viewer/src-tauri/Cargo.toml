@@ -1,0 +1,28 @@
+[package]
+name = "rocksdb-viewer"
+version = "0.0.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1", features = [] }
+
+[dependencies]
+tauri = { version = "1", features = [ "dialog-all", "shell-open", "devtools"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rust-rocksdb = "0.26"
+log = "0.4.21"
+lazy_static = "1.4.0"
+env_logger = "0.11.3"
+tokio = "1.38.0"
+ssh2 = "0.9"
+
+
+
+[features]
+# This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
