@@ -25,6 +25,12 @@ jobs:
             platform: linux/amd64
           - target: aarch64-unknown-linux-gnu
             platform: linux/arm64
+#          - target: i686-unknown-linux-gnu
+#            platform: linux/386
+#          - target: armv7-unknown-linux-gnueabihf
+#            platform: linux/arm/v7
+#          - target: armv5te-unknown-linux-gnueabi
+#            platform: linux/arm/v5
 
     steps:
       - name: Checkout code
@@ -65,7 +71,7 @@ jobs:
             -v $PWD:/code \
             --platform ${{ matrix.platform }} \
             localhost:5000/rocks-server:latest \
-            bash -c "rustup target add ${{ matrix.target }} && cargo build --release --target ${{ matrix.target }}"
+            bash -c "rustup target add ${{ matrix.target }} && cargo build --release --target ${{ matrix.target }} --manifest-path=server/Cargo.toml"
 
       - name: Rename binary
         run: |
