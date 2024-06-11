@@ -54,7 +54,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: 'rocksdb-viewer'
+          projectPath: './rocksdb-viewer'
           tagName: app-v__VERSION__ # the action automatically replaces __VERSION__ with the app version.
           releaseName: 'Viewer v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
