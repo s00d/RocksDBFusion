@@ -106,9 +106,6 @@ jobs:
   build-macos:
     name: Build and Release on macOS
     runs-on: macos-latest
-    services:
-      registry:
-        image: registry:2
 
     strategy:
       matrix:
@@ -128,6 +125,10 @@ jobs:
             target/
           key: macos-cargo-${{ matrix.targets }}
           restore-keys: macos-cargo-
+
+      - name: Setup docker
+        run: |
+          brew install docker
 
       - name: Set up Docker Buildx
         id: buildx
