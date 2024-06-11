@@ -21,8 +21,8 @@ jobs:
     strategy:
       matrix:
         include:
-#          - target: x86_64-unknown-linux-gnu
-#            platform: linux/amd64
+          - target: x86_64-unknown-linux-gnu
+            platform: linux/amd64
           - target: aarch64-unknown-linux-gnu
             platform: linux/arm64
     #          - target: i686-unknown-linux-gnu
@@ -84,12 +84,13 @@ jobs:
           VERSION=$(grep '^version =' server/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)".*/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
+
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}
-          name: Release v${{ env.VERSION }}
+          tag_name: server-v${{ env.version }}
+          name: Server Release ${{ env.version }}
           draft: false
           prerelease: false
         env:
@@ -98,7 +99,7 @@ jobs:
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}
+          tag_name: server-v${{ env.VERSION }}
           files: |
             artifacts/server-${{ matrix.target }}
 
