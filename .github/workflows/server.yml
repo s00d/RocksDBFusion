@@ -126,14 +126,15 @@ jobs:
           key: macos-cargo-${{ matrix.targets }}
           restore-keys: macos-cargo-
 
-      - name: Setup docker
+      - name: Install Docker
         run: |
-          brew install docker
-          ln -s ~/.docker/run/docker.sock /var/run/docker.sock
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v3
+          brew install --cask docker
+          open /Applications/Docker.app
+          # Wait until Docker daemon is running
+          while (! docker system info > /dev/null 2>&1); do
+            echo "Waiting for Docker to launch..."
+            sleep 10
+          done
 
       - name: Install Rust toolchain
         run: |
