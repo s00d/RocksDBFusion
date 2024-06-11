@@ -43,6 +43,12 @@ npm run tauri dev
 npm run tauri build
 ```
 
+### macos sign
+
+```bash
+xattr -cr ./rocksdb-viewer.app && codesign --force --deep --sign - ./rocksdb-viewer.app
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
