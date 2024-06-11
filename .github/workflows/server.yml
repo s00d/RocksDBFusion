@@ -111,7 +111,6 @@ jobs:
       matrix:
         targets: [ x86_64-apple-darwin, aarch64-apple-darwin ]
 
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
