@@ -47,7 +47,7 @@ jobs:
 
       - name: Install frontend dependencies
         run: |
-          cd rocksdb-viewer
+          cd ./rocksdb-viewer
           yarn install # change this to npm, pnpm or bun depending on which one you use.
 
       - uses: tauri-apps/tauri-action@v0
