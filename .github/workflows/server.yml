@@ -106,6 +106,9 @@ jobs:
   build-macos:
     name: Build and Release on macOS
     runs-on: macos-latest
+    services:
+      registry:
+        image: registry:2
 
     strategy:
       matrix:
@@ -129,8 +132,6 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: network=host
 
       - name: Install Rust toolchain
         run: |
