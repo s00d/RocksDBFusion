@@ -21,16 +21,16 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            platform: linux/amd64
+#          - target: x86_64-unknown-linux-gnu
+#            platform: linux/amd64
           - target: aarch64-unknown-linux-gnu
             platform: linux/arm64
-#          - target: i686-unknown-linux-gnu
-#            platform: linux/386
-#          - target: armv7-unknown-linux-gnueabihf
-#            platform: linux/arm/v7
-#          - target: armv5te-unknown-linux-gnueabi
-#            platform: linux/arm/v5
+    #          - target: i686-unknown-linux-gnu
+    #            platform: linux/386
+    #          - target: armv7-unknown-linux-gnueabihf
+    #            platform: linux/arm/v7
+    #          - target: armv5te-unknown-linux-gnueabi
+    #            platform: linux/arm/v5
 
     steps:
       - name: Checkout code
@@ -76,13 +76,7 @@ jobs:
       - name: Rename binary
         run: |
           mkdir -p artifacts
-          cp target/${{ matrix.target }}/release/rocksdb_server artifacts/rocksdb_server-${{ matrix.target }}
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ matrix.target }}-binary
-          path: artifacts/rocksdb_server-${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/rocksdb_server artifacts/server-${{ matrix.target }}
 
       - name: Get Cargo Version
         id: cargo_version
@@ -106,21 +100,15 @@ jobs:
         with:
           tag_name: v${{ env.VERSION }}
           files: |
-            artifacts/rocksdb_server-${{ matrix.target }}
+            artifacts/server-${{ matrix.target }}
 
-#  build:
-#    name: Build and Release
-#    runs-on: ${{ matrix.os }}
+#  build-macos:
+#    name: Build and Release on macOS
+#    runs-on: macos-latest
 #
 #    strategy:
 #      matrix:
-#        os: [macos-latest, windows-latest]
-#        clang: ["16"]
-#        include:
-#          - os: macos-latest
-#            targets: x86_64-apple-darwin aarch64-apple-darwin
-#          - os: windows-latest
-#            targets: x86_64-pc-windows-msvc x86_64-pc-windows-gnu i686-pc-windows-msvc
+#        targets: [x86_64-apple-darwin, aarch64-apple-darwin]
 #
 #    steps:
 #      - name: Checkout repository
@@ -134,38 +122,10 @@ jobs:
 #            ~/.cargo/registry/cache/
 #            ~/.cargo/git/db/
 #            target/
-#            ${{ runner.temp }}/llvm-${{ matrix.clang }}
-#          key: ${{ matrix.os }}-cargo-${{ matrix.targets }}
-#          restore-keys: |
-#            ${{ matrix.os }}-cargo-
+#          key: macos-cargo-${{ matrix.targets }}
+#          restore-keys: macos-cargo-
 #
-#      - name: Setup cache on Windows
-#        if: matrix.os == 'windows-latest'
-#        uses: actions/cache@v4
-#        with:
-#          path: |
-#            C:\Users\runneradmin\.cargo\registry\index\
-#            C:\Users\runneradmin\.cargo\registry\cache\
-#            C:\Users\runneradmin\.cargo\git\db\
-#            target\
-#          key: ${{ runner.os }}-cargo
-#          restore-keys: |
-#            ${{ runner.os }}-cargo-
-#
-#      - name: Install Rust toolchain on Windows
-#        if: matrix.os == 'windows-latest'
-#        run: |
-#          $ProgressPreference = 'SilentlyContinue'
-#          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
-#          Start-Process -FilePath .\rustup-init.exe -ArgumentList '-y' -NoNewWindow -Wait
-#          $env:Path += ';C:\Users\runneradmin\.cargo\bin'
-#          $targets = "${{ matrix.targets }}".Split(" ")
-#          foreach ($target in $targets) {
-#            rustup target add $target
-#          }
-#
-#      - name: Install Rust toolchain on macOS
-#        if: matrix.os == 'macos-latest'
+#      - name: Install Rust toolchain
 #        run: |
 #          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 #          source $HOME/.cargo/env
@@ -178,24 +138,7 @@ jobs:
 #        id: version
 #        run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
 #
-#      - name: Get version on Windows
-#        id: version_windows
-#        if: matrix.os == 'windows-latest'
-#        run: |
-#          $version = (Get-Content server\Cargo.toml | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }).Trim()
-#          Add-Content -Path $env:GITHUB_ENV -Value ("version=$version")
-#
-#      - name: Build and Release on Linux
-#        if: matrix.os == 'ubuntu-latest'
-#        run: |
-#          mkdir -p releases
-#          for target in ${{ matrix.targets }}; do
-#            cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
-#            cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
-#          done
-#
-#      - name: Build and Release on macOS
-#        if: matrix.os == 'macos-latest'
+#      - name: Build and Release
 #        run: |
 #          mkdir -p releases
 #          echo "LIBCLANG_PATH=${LIBCLANG_PATH}"
@@ -205,8 +148,65 @@ jobs:
 #            cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
 #          done
 #
-#      - name: Build and Release on Windows
-#        if: matrix.os == 'windows-latest'
+#      - name: Create GitHub Release
+#        id: create_release
+#        uses: softprops/action-gh-release@v2
+#        with:
+#          tag_name: server-v${{ env.version }}
+#          name: Server Release ${{ env.version }}
+#          draft: false
+#          prerelease: false
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Upload Release Assets
+#        run: |
+#          for file in releases/*; do
+#            gh release upload server-v${{ env.version }} "$file" --clobber
+#          done
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#  build-windows:
+#    name: Build and Release on Windows
+#    runs-on: windows-latest
+#
+#    strategy:
+#      matrix:
+#        targets: [x86_64-pc-windows-msvc, x86_64-pc-windows-gnu, i686-pc-windows-msvc]
+#
+#    steps:
+#      - name: Checkout repository
+#        uses: actions/checkout@v4
+#
+#      - uses: actions/cache@v4
+#        with:
+#          path: |
+#            C:\Users\runneradmin\.cargo\registry\index\
+#            C:\Users\runneradmin\.cargo\registry\cache\
+#            C:\Users\runneradmin\.cargo\git\db\
+#            target\
+#          key: windows-cargo
+#          restore-keys: windows-cargo-
+#
+#      - name: Install Rust toolchain
+#        run: |
+#          $ProgressPreference = 'SilentlyContinue'
+#          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+#          Start-Process -FilePath .\rustup-init.exe -ArgumentList '-y' -NoNewWindow -Wait
+#          $env:Path += ';C:\Users\runneradmin\.cargo\bin'
+#          $targets = "${{ matrix.targets }}".Split(" ")
+#          foreach ($target in $targets) {
+#            rustup target add $target
+#          }
+#
+#      - name: Get version
+#        id: version
+#        run: |
+#          $version = (Get-Content server\Cargo.toml | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }).Trim()
+#          Add-Content -Path $env:GITHUB_ENV -Value ("version=$version")
+#
+#      - name: Build and Release
 #        run: |
 #          mkdir -p releases
 #          $targets = "${{ matrix.targets }}".Split(" ")
@@ -228,17 +228,7 @@ jobs:
 #        env:
 #          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #
-#      - name: Upload Release Assets on Linux and macOS
-#        if: matrix.os != 'windows-latest'
-#        run: |
-#          for file in releases/*; do
-#            gh release upload server-v${{ env.version }} "$file" --clobber
-#          done
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#      - name: Upload Release Assets on Windows
-#        if: matrix.os == 'windows-latest'
+#      - name: Upload Release Assets
 #        run: |
 #          $files = Get-ChildItem -Path releases
 #          foreach ($file in $files) {
