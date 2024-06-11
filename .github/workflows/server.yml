@@ -105,7 +105,7 @@ jobs:
 
   build-macos:
     name: Build and Release on macOS
-    runs-on: macos-13
+    runs-on: macos-12
 
     strategy:
       matrix:
