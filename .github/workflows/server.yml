@@ -1,108 +1,108 @@
-name: Build and Release
-
-on:
-  push:
-    branches:
-      - main
-
-permissions:
-  contents: write
-
-jobs:
-  build-linux:
-    name: Build and Release on Linux
-    services:
-      registry:
-        image: registry:2
-        ports:
-          - 5000:5000
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            platform: linux/amd64
-          - target: aarch64-unknown-linux-gnu
-            platform: linux/arm64
-    #          - target: i686-unknown-linux-gnu
-    #            platform: linux/386
-    #          - target: armv7-unknown-linux-gnueabihf
-    #            platform: linux/arm/v7
-    #          - target: armv5te-unknown-linux-gnueabi
-    #            platform: linux/arm/v5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-${{ matrix.target }}
-
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: network=host
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: ${{ matrix.platform }}
-          push: true
-          tags: localhost:5000/rocks-server:latest
-
-      - name: Build with Docker
-        run: |
-          docker run --rm \
-            -v ~/.cargo/registry:/root/.cargo/registry \
-            -v ~/.cargo/git:/root/.cargo/git \
-            -v $PWD:/code \
-            --platform ${{ matrix.platform }} \
-            localhost:5000/rocks-server:latest \
-            bash -c "rustup target add ${{ matrix.target }} && cargo build --release --target ${{ matrix.target }} --manifest-path=server/Cargo.toml"
-
-      - name: Rename binary
-        run: |
-          mkdir -p artifacts
-          cp target/${{ matrix.target }}/release/rocksdb_server artifacts/server-${{ matrix.target }}
-
-      - name: Get Cargo Version
-        id: cargo_version
-        run: |
-          VERSION=$(grep '^version =' server/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)".*/\1/')
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: server-v${{ env.version }}
-          name: Server Release ${{ env.version }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: server-v${{ env.VERSION }}
-          files: |
-            artifacts/server-${{ matrix.target }}
-
+#name: Build and Release
+#
+#on:
+#  push:
+#    branches:
+#      - main
+#
+#permissions:
+#  contents: write
+#
+#jobs:
+#  build-linux:
+#    name: Build and Release on Linux
+#    services:
+#      registry:
+#        image: registry:2
+#        ports:
+#          - 5000:5000
+#    runs-on: ubuntu-latest
+#
+#    strategy:
+#      matrix:
+#        include:
+#          - target: x86_64-unknown-linux-gnu
+#            platform: linux/amd64
+#          - target: aarch64-unknown-linux-gnu
+#            platform: linux/arm64
+#    #          - target: i686-unknown-linux-gnu
+#    #            platform: linux/386
+#    #          - target: armv7-unknown-linux-gnueabihf
+#    #            platform: linux/arm/v7
+#    #          - target: armv5te-unknown-linux-gnueabi
+#    #            platform: linux/arm/v5
+#
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#
+#      - uses: actions/cache@v4
+#        with:
+#          path: |
+#            ~/.cargo/bin/
+#            ~/.cargo/registry/index/
+#            ~/.cargo/registry/cache/
+#            ~/.cargo/git/db/
+#            target/
+#          key: ${{ runner.os }}-${{ matrix.target }}
+#
+#      - name: Setup QEMU
+#        uses: docker/setup-qemu-action@v3
+#
+#      - name: Set up Docker Buildx
+#        id: buildx
+#        uses: docker/setup-buildx-action@v3
+#        with:
+#          driver-opts: network=host
+#
+#      - name: Build Docker image
+#        uses: docker/build-push-action@v5
+#        with:
+#          context: .
+#          platforms: ${{ matrix.platform }}
+#          push: true
+#          tags: localhost:5000/rocks-server:latest
+#
+#      - name: Build with Docker
+#        run: |
+#          docker run --rm \
+#            -v ~/.cargo/registry:/root/.cargo/registry \
+#            -v ~/.cargo/git:/root/.cargo/git \
+#            -v $PWD:/code \
+#            --platform ${{ matrix.platform }} \
+#            localhost:5000/rocks-server:latest \
+#            bash -c "rustup target add ${{ matrix.target }} && cargo build --release --target ${{ matrix.target }} --manifest-path=server/Cargo.toml"
+#
+#      - name: Rename binary
+#        run: |
+#          mkdir -p artifacts
+#          cp target/${{ matrix.target }}/release/rocksdb_server artifacts/server-${{ matrix.target }}
+#
+#      - name: Get Cargo Version
+#        id: cargo_version
+#        run: |
+#          VERSION=$(grep '^version =' server/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)".*/\1/')
+#          echo "VERSION=$VERSION" >> $GITHUB_ENV
+#
+#
+#      - name: Create GitHub Release
+#        id: create_release
+#        uses: softprops/action-gh-release@v2
+#        with:
+#          tag_name: server-v${{ env.VERSION }}
+#          name: Server Release ${{ env.version }}
+#          draft: false
+#          prerelease: false
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Upload Release Asset
+#        uses: softprops/action-gh-release@v2
+#        with:
+#          tag_name: server-v${{ env.VERSION }}
+#          files: |
+#            artifacts/server-${{ matrix.target }}
+#
 #  build-macos:
 #    name: Build and Release on macOS
 #    runs-on: macos-latest

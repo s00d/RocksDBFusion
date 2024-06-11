@@ -1,5 +1,6 @@
 [workspace]
 members = ["server", "client"]
+exclude = ["rocksdb-viewer"]
 resolver = "2"
 
 [profile.release]
