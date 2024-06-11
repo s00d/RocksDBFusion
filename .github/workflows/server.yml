@@ -1,14 +1,14 @@
-#name: Build and Release
-#
-#on:
-#  push:
-#    branches:
-#      - main
-#
-#permissions:
-#  contents: write
-#
-#jobs:
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
 #  build-linux:
 #    name: Build and Release on Linux
 #    services:
@@ -102,72 +102,76 @@
 #          tag_name: server-v${{ env.VERSION }}
 #          files: |
 #            artifacts/server-${{ matrix.target }}
-#
-#  build-macos:
-#    name: Build and Release on macOS
-#    runs-on: macos-latest
-#
-#    strategy:
-#      matrix:
-#        targets: [x86_64-apple-darwin, aarch64-apple-darwin]
-#
-#    steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v4
-#
-#      - uses: actions/cache@v4
-#        with:
-#          path: |
-#            ~/.cargo/bin/
-#            ~/.cargo/registry/index/
-#            ~/.cargo/registry/cache/
-#            ~/.cargo/git/db/
-#            target/
-#          key: macos-cargo-${{ matrix.targets }}
-#          restore-keys: macos-cargo-
-#
-#      - name: Install Rust toolchain
-#        run: |
-#          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-#          source $HOME/.cargo/env
-#          rustup default stable
-#          for target in ${{ matrix.targets }}; do
-#            rustup target add $target
-#          done
-#
-#      - name: Get version
-#        id: version
-#        run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
-#
-#      - name: Build and Release
-#        run: |
-#          mkdir -p releases
-#          echo "LIBCLANG_PATH=${LIBCLANG_PATH}"
-#          echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
-#          for target in ${{ matrix.targets }}; do
-#            cargo build --release --target $target --manifest-path=server/Cargo.toml || continue
-#            cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
-#          done
-#
-#      - name: Create GitHub Release
-#        id: create_release
-#        uses: softprops/action-gh-release@v2
-#        with:
-#          tag_name: server-v${{ env.version }}
-#          name: Server Release ${{ env.version }}
-#          draft: false
-#          prerelease: false
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#      - name: Upload Release Assets
-#        run: |
-#          for file in releases/*; do
-#            gh release upload server-v${{ env.version }} "$file" --clobber
-#          done
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
+
+  build-macos:
+    name: Build and Release on macOS
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        targets: [ x86_64-apple-darwin, aarch64-apple-darwin ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: macos-cargo-${{ matrix.targets }}
+          restore-keys: macos-cargo-
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup default stable
+          for target in ${{ matrix.targets }}; do
+            rustup target add $target
+          done
+
+      - name: Get version
+        id: version
+        run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
+
+      - name: Build with clechasseur/rs-cargo
+        uses: clechasseur/rs-cargo@v2
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.targets }} --manifest-path=server/Cargo.toml
+
+      - name: Rename binary
+        run: |
+          mkdir -p releases
+          for target in ${{ matrix.targets }}; do
+            cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
+          done
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: server-v${{ env.version }}
+          name: Server Release ${{ env.version }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets
+        run: |
+          for file in releases/*; do
+            gh release upload server-v${{ env.version }} "$file" --clobber
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 #  build-windows:
 #    name: Build and Release on Windows
 #    runs-on: windows-latest
