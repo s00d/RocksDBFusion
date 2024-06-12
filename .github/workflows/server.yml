@@ -197,7 +197,7 @@ jobs:
         with:
           tag_name: server-v${{ env.version }}
           name: Server Release ${{ env.version }}
-          draft: false
+          draft: true
           prerelease: false
           files: "rocksdb_server-*"
           body_path: Changes.md
