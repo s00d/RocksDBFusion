@@ -132,6 +132,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          sudo ln -s /usr/bin/musl-gcc /usr/local/bin/x86_64-linux-musl-gcc
+          sudo ln -s /usr/bin/musl-gcc /usr/local/bin/musl-gcc
+
       - name: Get version
         id: version
         run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
@@ -143,14 +151,6 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: "--locked --release --manifest-path=server/Cargo.toml"
           strip: true
-
-      - name: Install dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          sudo ln -s /usr/bin/musl-gcc /usr/local/bin/x86_64-linux-musl-gcc
-          sudo ln -s /usr/bin/musl-gcc /usr/local/bin/musl-gcc
 
       - name: Package as archive
         shell: bash
