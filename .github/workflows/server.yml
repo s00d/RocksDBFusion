@@ -132,12 +132,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        if: matrix.platform.target == 'x86_64-unknown-linux-musl'
-        run: |
-          alias rust-musl-builder='docker run --rm -it -v "$(pwd)":/home/rust/src ekidd/rust-musl-builder'
-          rust-musl-builder cargo build --release
-
       - name: Get version
         id: version
         run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
