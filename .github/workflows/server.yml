@@ -104,8 +104,8 @@ jobs:
 #            artifacts/server-${{ matrix.target }}
 
   build-macos:
-    name: Build and Release on macOS
-    runs-on: ubuntu-latest
+    name: Release - ${{ matrix.platform.release_for }}
+    runs-on: ${{ matrix.platform.os }}
 
     strategy:
       matrix:
