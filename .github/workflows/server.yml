@@ -51,26 +51,26 @@ jobs:
             name: server-Linux-i686-musl.tar.gz
             command: build
             
-          - release_for: Linux-powerpc
-            os: ubuntu-20.04
-            target: powerpc-unknown-linux-gnu
-            bin: server
-            name: server-Linux-powerpc-gnu.tar.gz
-            command: build
-            
-          - release_for: Linux-powerpc64
-            os: ubuntu-20.04
-            target: powerpc64-unknown-linux-gnu
-            bin: server
-            name: server-Linux-powerpc64-gnu.tar.gz
-            command: build
-            
-          - release_for: Linux-powerpc64le
-            os: ubuntu-20.04
-            target: powerpc64le-unknown-linux-gnu
-            bin: server
-            name: server-Linux-powerpc64le.tar.gz
-            command: build
+#          - release_for: Linux-powerpc
+#            os: ubuntu-20.04
+#            target: powerpc-unknown-linux-gnu
+#            bin: server
+#            name: server-Linux-powerpc-gnu.tar.gz
+#            command: build
+#
+#          - release_for: Linux-powerpc64
+#            os: ubuntu-20.04
+#            target: powerpc64-unknown-linux-gnu
+#            bin: server
+#            name: server-Linux-powerpc64-gnu.tar.gz
+#            command: build
+#
+#          - release_for: Linux-powerpc64le
+#            os: ubuntu-20.04
+#            target: powerpc64le-unknown-linux-gnu
+#            bin: server
+#            name: server-Linux-powerpc64le.tar.gz
+#            command: build
             
           - release_for: Linux-riscv64
             os: ubuntu-20.04
