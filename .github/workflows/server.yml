@@ -16,53 +16,116 @@ jobs:
     strategy:
       matrix:
         platform:
+          - release_for: FreeBSD-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-freebsd
+            bin: server
+            name: server-FreeBSD-x86_64.tar.gz
+            command: build
+
+          - release_for: Linux-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+            bin: server
+            name: server-Linux-x86_64-musl.tar.gz
+            command: build
+            
+          - release_for: Linux-aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+            bin: server
+            name: server-Linux-aarch64-musl.tar.gz
+            command: build
+            
+          - release_for: Linux-arm
+            os: ubuntu-20.04
+            target: arm-unknown-linux-musleabi
+            bin: server
+            name: server-Linux-arm-musl.tar.gz
+            command: build
+            
+          - release_for: Linux-i686
+            os: ubuntu-20.04
+            target: i686-unknown-linux-musl
+            bin: server
+            name: server-Linux-i686-musl.tar.gz
+            command: build
+            
+          - release_for: Linux-powerpc
+            os: ubuntu-20.04
+            target: powerpc-unknown-linux-gnu
+            bin: server
+            name: server-Linux-powerpc-gnu.tar.gz
+            command: build
+            
+          - release_for: Linux-powerpc64
+            os: ubuntu-20.04
+            target: powerpc64-unknown-linux-gnu
+            bin: server
+            name: server-Linux-powerpc64-gnu.tar.gz
+            command: build
+            
+          - release_for: Linux-powerpc64le
+            os: ubuntu-20.04
+            target: powerpc64le-unknown-linux-gnu
+            bin: server
+            name: server-Linux-powerpc64le.tar.gz
+            command: build
+            
+          - release_for: Linux-riscv64
+            os: ubuntu-20.04
+            target: riscv64gc-unknown-linux-gnu
+            bin: server
+            name: server-Linux-riscv64gc-gnu.tar.gz
+            command: build
+            
+          - release_for: Linux-s390x
+            os: ubuntu-20.04
+            target: s390x-unknown-linux-gnu
+            bin: server
+            name: server-Linux-s390x-gnu.tar.gz
+            command: build
+            
+          - release_for: NetBSD-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-netbsd
+            bin: server
+            name: server-NetBSD-x86_64.tar.gz
+            command: build
+            
+          - release_for: Windows-aarch64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bin: server.exe
+            name: server-Windows-aarch64.zip
+            command: build
+            
+          - release_for: Windows-i686
+            os: windows-latest
+            target: i686-pc-windows-msvc
+            bin: server.exe
+            name: server-Windows-i686.zip
+            command: build
+            
+          - release_for: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: server.exe
+            name: server-Windows-x86_64.zip
+            command: build
+            
           - release_for: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
             bin: server
             name: server-Darwin-x86_64.tar.gz
             command: build
-
+            
           - release_for: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
             bin: server
             name: server-Darwin-aarch64.tar.gz
-            command: build
-
-          - release_for: Linux-x86_64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            bin: server
-            name: server-Linux-x86_64.tar.gz
-            command: build
-
-          - release_for: Linux-aarch64
-            os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            bin: server
-            name: server-Linux-aarch64.tar.gz
-            command: build
-
-          - release_for: Windows-x86_64-msvc
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bin: server.exe
-            name: server-Windows-x86_64-msvc.zip
-            command: build
-
-          - release_for: Windows-x86_64-gnu
-            os: windows-latest
-            target: x86_64-pc-windows-gnu
-            bin: server.exe
-            name: server-Windows-x86_64-gnu.zip
-            command: build
-
-          - release_for: Windows-i686-msvc
-            os: windows-latest
-            target: i686-pc-windows-msvc
-            bin: server.exe
-            name: server-Windows-i686-msvc.zip
             command: build
 
     steps:
