@@ -23,12 +23,12 @@ jobs:
             name: server-FreeBSD-x86_64.tar.gz
             command: build
 
-          - release_for: Linux-x86_64
-            os: ubuntu-20.04
-            target: x86_64-unknown-linux-musl
-            bin: server
-            name: server-Linux-x86_64-musl.tar.gz
-            command: build
+#          - release_for: Linux-x86_64
+#            os: ubuntu-20.04
+#            target: x86_64-unknown-linux-musl
+#            bin: server
+#            name: server-Linux-x86_64-musl.tar.gz
+#            command: build
             
           - release_for: Linux-aarch64
             os: ubuntu-20.04
