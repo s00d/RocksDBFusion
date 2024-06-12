@@ -69,6 +69,11 @@ async fn main() -> io::Result<()> {
         None
     };
 
+    #[cfg(target_os = "windows")]
+    if opt.lock_file.is_some() {
+        warn!("File locking is not supported on Windows. The lock file option will be ignored.");
+    }
+
     let log_level: LevelFilter = opt.log_level.into();
 
     Builder::new()

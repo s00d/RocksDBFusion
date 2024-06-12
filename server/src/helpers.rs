@@ -1,8 +1,10 @@
 #[cfg(not(target_os = "windows"))]
 use file_lock::{FileLock, FileOptions};
 use log::LevelFilter;
+#[cfg(not(target_os = "windows"))]
 use std::path::PathBuf;
 use std::str::FromStr;
+#[cfg(not(target_os = "windows"))]
 use tokio::io;
 
 #[derive(Debug)]
