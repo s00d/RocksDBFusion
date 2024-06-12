@@ -12,6 +12,7 @@ jobs:
   build:
     name: Release - ${{ matrix.platform.release_for }}
     runs-on: ${{ matrix.platform.os }}
+    continue-on-error: true
 
     strategy:
       matrix:
@@ -19,15 +20,15 @@ jobs:
 #          - release_for: FreeBSD-x86_64
 #            os: ubuntu-20.04
 #            target: x86_64-unknown-freebsd
-#            bin: server
-#            name: server-FreeBSD-x86_64.tar.gz
+#            bin: rocksdb_server
+#            name: rocksdb_server-FreeBSD-x86_64.tar.gz
 #            command: build
 
 #          - release_for: Linux-x86_64
 #            os: ubuntu-20.04
 #            target: x86_64-unknown-linux-musl
-#            bin: server
-#            name: server-Linux-x86_64-musl.tar.gz
+#            bin: rocksdb_server
+#            name: rocksdb_server-Linux-x86_64-musl.tar.gz
 #            command: build
             
           - release_for: Linux-aarch64
