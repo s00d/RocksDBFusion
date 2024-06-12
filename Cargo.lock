@@ -1286,7 +1286,6 @@ dependencies = [
  "structopt",
  "tokio",
  "tokio-test",
- "tokio-util",
 ]
 
 [[package]]
