@@ -177,10 +177,6 @@ jobs:
           fi
           cd -
 
-      - name: Generate SHA-256
-        run: shasum -a 256 ${{ matrix.platform.name }}
-        shell: bash
-
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v2
