@@ -154,7 +154,7 @@ jobs:
       - name: Rename binary
         run: |
           mkdir -p releases
-           cp target/${{ matrix.platform.target }}/release/rocksdb_server releases/server-${{ env.version }}-$target
+           cp target/${{ matrix.platform.target }}/release/rocksdb_server releases/server-${{ env.version }}-${{ matrix.platform.target }}
 
       - name: Create GitHub Release
         id: create_release
