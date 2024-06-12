@@ -164,7 +164,7 @@ jobs:
 
       - name: Get version (Windows)
         if: runner.os == 'Windows'
-        id: version
+        id: version-win
         run: |
           $content = Get-Content -Path server/Cargo.toml
           $version = $content | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches.Groups[1].Value }
