@@ -132,6 +132,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        if: runner.os == 'ubuntu-20.04'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
       - name: Get version
         id: version
         run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
