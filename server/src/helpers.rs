@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "windows"))]
 use file_lock::{FileLock, FileOptions};
 use log::LevelFilter;
 use std::path::PathBuf;
@@ -37,11 +38,12 @@ impl Into<LevelFilter> for LogLevel {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 pub struct LockFileGuard {
     path: PathBuf,
     _file: FileLock,
 }
-
+#[cfg(not(target_os = "windows"))]
 impl LockFileGuard {
     pub(crate) fn new(path: PathBuf) -> io::Result<Self> {
         let options = FileOptions::new().write(true).create(true).append(false);
@@ -53,7 +55,7 @@ impl LockFileGuard {
         })
     }
 }
-
+#[cfg(not(target_os = "windows"))]
 impl Drop for LockFileGuard {
     fn drop(&mut self) {
         if let Err(e) = self._file.unlock() {

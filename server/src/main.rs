@@ -2,7 +2,9 @@ pub mod db_manager;
 mod helpers;
 pub mod server;
 
-use crate::helpers::{LockFileGuard, LogLevel};
+use crate::helpers::{LogLevel};
+#[cfg(not(target_os = "windows"))]
+use crate::helpers::{LockFileGuard};
 use env_logger::{Builder, Target};
 use log::{info, LevelFilter};
 use server::RocksDBServer;

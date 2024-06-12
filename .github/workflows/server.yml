@@ -38,12 +38,12 @@ jobs:
             name: rocksdb_server-Linux-aarch64-musl.tar.gz
             command: build
             
-          - release_for: Linux-arm
-            os: ubuntu-20.04
-            target: arm-unknown-linux-musleabi
-            bin: rocksdb_server
-            name: rocksdb_server-Linux-arm-musl.tar.gz
-            command: build
+#          - release_for: Linux-arm
+#            os: ubuntu-20.04
+#            target: arm-unknown-linux-musleabi
+#            bin: rocksdb_server
+#            name: rocksdb_server-Linux-arm-musl.tar.gz
+#            command: build
             
           - release_for: Linux-i686
             os: ubuntu-20.04
@@ -121,7 +121,7 @@ jobs:
             bin: rocksdb_server
             name: rocksdb_server-Darwin-x86_64.tar.gz
             command: build
-            
+
           - release_for: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
