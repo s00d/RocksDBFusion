@@ -136,7 +136,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: macos-cargo-${{ matrix.targets }}
+          key: macos-cargo-${{ matrix.platform.target }}
           restore-keys: macos-cargo-
 
       - name: Get version
@@ -154,9 +154,7 @@ jobs:
       - name: Rename binary
         run: |
           mkdir -p releases
-          for target in ${{ matrix.targets }}; do
-            cp target/$target/release/rocksdb_server releases/server-${{ env.version }}-$target
-          done
+           cp target/${{ matrix.platform.target }}/release/rocksdb_server releases/server-${{ env.version }}-$target
 
       - name: Create GitHub Release
         id: create_release
