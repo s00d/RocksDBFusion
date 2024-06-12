@@ -111,7 +111,6 @@ jobs:
       matrix:
         targets: [ x86_64-apple-darwin, aarch64-apple-darwin ]
 
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -127,14 +126,9 @@ jobs:
           key: macos-cargo-${{ matrix.targets }}
           restore-keys: macos-cargo-
 
-      - name: Install Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          source $HOME/.cargo/env
-          rustup default stable
-          for target in ${{ matrix.targets }}; do
-            rustup target add $target
-          done
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
 
       - name: Get version
         id: version
