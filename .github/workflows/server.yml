@@ -9,101 +9,7 @@ permissions:
   contents: write
 
 jobs:
-#  build-linux:
-#    name: Build and Release on Linux
-#    services:
-#      registry:
-#        image: registry:2
-#        ports:
-#          - 5000:5000
-#    runs-on: ubuntu-latest
-#
-#    strategy:
-#      matrix:
-#        include:
-#          - target: x86_64-unknown-linux-gnu
-#            platform: linux/amd64
-#          - target: aarch64-unknown-linux-gnu
-#            platform: linux/arm64
-#    #          - target: i686-unknown-linux-gnu
-#    #            platform: linux/386
-#    #          - target: armv7-unknown-linux-gnueabihf
-#    #            platform: linux/arm/v7
-#    #          - target: armv5te-unknown-linux-gnueabi
-#    #            platform: linux/arm/v5
-#
-#    steps:
-#      - name: Checkout code
-#        uses: actions/checkout@v4
-#
-#      - uses: actions/cache@v4
-#        with:
-#          path: |
-#            ~/.cargo/bin/
-#            ~/.cargo/registry/index/
-#            ~/.cargo/registry/cache/
-#            ~/.cargo/git/db/
-#            target/
-#          key: ${{ runner.os }}-${{ matrix.target }}
-#
-#      - name: Setup QEMU
-#        uses: docker/setup-qemu-action@v3
-#
-#      - name: Set up Docker Buildx
-#        id: buildx
-#        uses: docker/setup-buildx-action@v3
-#        with:
-#          driver-opts: network=host
-#
-#      - name: Build Docker image
-#        uses: docker/build-push-action@v5
-#        with:
-#          context: .
-#          platforms: ${{ matrix.platform }}
-#          push: true
-#          tags: localhost:5000/rocks-server:latest
-#
-#      - name: Build with Docker
-#        run: |
-#          docker run --rm \
-#            -v ~/.cargo/registry:/root/.cargo/registry \
-#            -v ~/.cargo/git:/root/.cargo/git \
-#            -v $PWD:/code \
-#            --platform ${{ matrix.platform }} \
-#            localhost:5000/rocks-server:latest \
-#            bash -c "rustup target add ${{ matrix.target }} && cargo build --release --target ${{ matrix.target }} --manifest-path=server/Cargo.toml"
-#
-#      - name: Rename binary
-#        run: |
-#          mkdir -p artifacts
-#          cp target/${{ matrix.target }}/release/rocksdb_server artifacts/server-${{ matrix.target }}
-#
-#      - name: Get Cargo Version
-#        id: cargo_version
-#        run: |
-#          VERSION=$(grep '^version =' server/Cargo.toml | head -n 1 | sed 's/.*"\(.*\)".*/\1/')
-#          echo "VERSION=$VERSION" >> $GITHUB_ENV
-#
-#
-#      - name: Create GitHub Release
-#        id: create_release
-#        uses: softprops/action-gh-release@v2
-#        with:
-#          tag_name: server-v${{ env.VERSION }}
-#          name: Server Release ${{ env.version }}
-#          draft: false
-#          prerelease: false
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#      - name: Upload Release Asset
-#        uses: softprops/action-gh-release@v2
-#        with:
-#          tag_name: server-v${{ env.VERSION }}
-#          files: |
-#            artifacts/server-${{ matrix.target }}
-
-  build-macos:
+  build:
     name: Release - ${{ matrix.platform.release_for }}
     runs-on: ${{ matrix.platform.os }}
 
@@ -113,31 +19,55 @@ jobs:
           - release_for: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
-            bin: precious
+            bin: server
             name: server-Darwin-x86_64.tar.gz
             command: build
 
           - release_for: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
-            bin: precious
+            bin: server
             name: server-Darwin-aarch64.tar.gz
+            command: build
+
+          - release_for: Linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: server
+            name: server-Linux-x86_64.tar.gz
+            command: build
+
+          - release_for: Linux-aarch64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            bin: server
+            name: server-Linux-aarch64.tar.gz
+            command: build
+
+          - release_for: Windows-x86_64-msvc
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: server.exe
+            name: server-Windows-x86_64-msvc.zip
+            command: build
+
+          - release_for: Windows-x86_64-gnu
+            os: windows-latest
+            target: x86_64-pc-windows-gnu
+            bin: server.exe
+            name: server-Windows-x86_64-gnu.zip
+            command: build
+
+          - release_for: Windows-i686-msvc
+            os: windows-latest
+            target: i686-pc-windows-msvc
+            bin: server.exe
+            name: server-Windows-i686-msvc.zip
             command: build
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: macos-cargo-${{ matrix.platform.target }}
-          restore-keys: macos-cargo-
 
       - name: Get version
         id: version
@@ -151,10 +81,22 @@ jobs:
           args: "--locked --release --manifest-path=server/Cargo.toml"
           strip: true
 
-      - name: Rename binary
+
+
+      - name: Package as archive
+        shell: bash
         run: |
-          mkdir -p releases
-           cp target/${{ matrix.platform.target }}/release/rocksdb_server releases/server-${{ env.version }}-${{ matrix.platform.target }}
+          cd target/${{ matrix.platform.target }}/release
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          else
+            tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          fi
+          cd -
+
+      - name: Generate SHA-256
+        run: shasum -a 256 ${{ matrix.platform.name }}
+        shell: bash
 
       - name: Create GitHub Release
         id: create_release
@@ -162,85 +104,10 @@ jobs:
         with:
           tag_name: server-v${{ env.version }}
           name: Server Release ${{ env.version }}
-          draft: false
+          draft: true
           prerelease: false
+          files: "server-*"
+          body_path: Changes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Release Assets
-        run: |
-          for file in releases/*; do
-            gh release upload server-v${{ env.version }} "$file" --clobber
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-#  build-windows:
-#    name: Build and Release on Windows
-#    runs-on: windows-latest
-#
-#    strategy:
-#      matrix:
-#        targets: [x86_64-pc-windows-msvc, x86_64-pc-windows-gnu, i686-pc-windows-msvc]
-#
-#    steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v4
-#
-#      - uses: actions/cache@v4
-#        with:
-#          path: |
-#            C:\Users\runneradmin\.cargo\registry\index\
-#            C:\Users\runneradmin\.cargo\registry\cache\
-#            C:\Users\runneradmin\.cargo\git\db\
-#            target\
-#          key: windows-cargo
-#          restore-keys: windows-cargo-
-#
-#      - name: Install Rust toolchain
-#        run: |
-#          $ProgressPreference = 'SilentlyContinue'
-#          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
-#          Start-Process -FilePath .\rustup-init.exe -ArgumentList '-y' -NoNewWindow -Wait
-#          $env:Path += ';C:\Users\runneradmin\.cargo\bin'
-#          $targets = "${{ matrix.targets }}".Split(" ")
-#          foreach ($target in $targets) {
-#            rustup target add $target
-#          }
-#
-#      - name: Get version
-#        id: version
-#        run: |
-#          $version = (Get-Content server\Cargo.toml | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }).Trim()
-#          Add-Content -Path $env:GITHUB_ENV -Value ("version=$version")
-#
-#      - name: Build and Release
-#        run: |
-#          mkdir -p releases
-#          $targets = "${{ matrix.targets }}".Split(" ")
-#          foreach ($target in $targets) {
-#            cargo build --release --target $target --manifest-path=server/Cargo.toml
-#            if ($?) {
-#              Copy-Item -Path "target\$target\release\rocksdb_server.exe" -Destination "releases\server-${{ env.version }}-$target.exe"
-#            }
-#          }
-#
-#      - name: Create GitHub Release
-#        id: create_release
-#        uses: softprops/action-gh-release@v2
-#        with:
-#          tag_name: server-v${{ env.version }}
-#          name: Server Release ${{ env.version }}
-#          draft: false
-#          prerelease: false
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#      - name: Upload Release Assets
-#        run: |
-#          $files = Get-ChildItem -Path releases
-#          foreach ($file in $files) {
-#            gh release upload server-v${{ env.version }} $file.FullName --clobber
-#          }
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

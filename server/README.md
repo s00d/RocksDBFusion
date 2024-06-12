@@ -54,6 +54,13 @@ To start the RocksDB server, use the following command:
 - `--log-level <LEVEL>`: Logging level (debug, info, warn, error)
 - `--lock-file <FILE>`: Path to the lock file
 
+### macos sign
+
+```bash
+chmod +x ./server-0.1.1-aarch64-apple-darwin
+xattr -cr ./server-0.1.1-aarch64-apple-darwin && codesign --force --deep --sign - ./server-0.1.1-aarch64-apple-darwin
+```
+
 ## Code Structure
 
 ### `main.rs`
