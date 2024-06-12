@@ -60,6 +60,7 @@ async fn main() -> io::Result<()> {
     let ttl = opt.ttl;
     let token = opt.token;
 
+    #[cfg(not(target_os = "windows"))]
     let _lock_guard = if let Some(lock_file_path) = opt.lock_file {
         Some(LockFileGuard::new(lock_file_path)?)
     } else {
