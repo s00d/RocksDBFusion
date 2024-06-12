@@ -17,12 +17,12 @@ jobs:
     strategy:
       matrix:
         platform:
-          - release_for: FreeBSD-x86_64
-            os: ubuntu-22.04
-            target: x86_64-unknown-freebsd
-            bin: rocksdb_server
-            name: rocksdb_server-FreeBSD-x86_64.tar.gz
-            command: build
+#          - release_for: FreeBSD-x86_64
+#            os: ubuntu-22.04
+#            target: x86_64-unknown-freebsd
+#            bin: rocksdb_server
+#            name: rocksdb_server-FreeBSD-x86_64.tar.gz
+#            command: build
 
 #          - release_for: Linux-arm
 #            os: ubuntu-20.04
@@ -83,54 +83,54 @@ jobs:
 
 # ------- worked
 
-#          - release_for: Linux-aarch64
-#            os: ubuntu-20.04
-#            target: aarch64-unknown-linux-musl
-#            bin: rocksdb_server
-#            name: rocksdb_server-Linux-aarch64-musl.tar.gz
-#            command: build
-#
-#          - release_for: Linux-x86_64
-#            os: ubuntu-20.04
-#            target: x86_64-unknown-linux-musl
-#            bin: rocksdb_server
-#            name: rocksdb_server-Linux-x86_64-musl.tar.gz
-#            command: build
-#
-#          - release_for: Linux-i686
-#            os: ubuntu-20.04
-#            target: i686-unknown-linux-musl
-#            bin: rocksdb_server
-#            name: rocksdb_server-Linux-i686-musl.tar.gz
-#            command: build
-##
-#          - release_for: Windows-aarch64
-#            os: windows-latest
-#            target: aarch64-pc-windows-msvc
-#            bin: rocksdb_server.exe
-#            name: rocksdb_server-Windows-aarch64.zip
-#            command: build
-#
-#          - release_for: Windows-x86_64
-#            os: windows-latest
-#            target: x86_64-pc-windows-msvc
-#            bin: rocksdb_server.exe
-#            name: rocksdb_server-Windows-x86_64.zip
-#            command: build
-#
-#          - release_for: macOS-x86_64
-#            os: macOS-latest
-#            target: x86_64-apple-darwin
-#            bin: rocksdb_server
-#            name: rocksdb_server-Darwin-x86_64.tar.gz
-#            command: build
-#
-#          - release_for: macOS-aarch64
-#            os: macOS-latest
-#            target: aarch64-apple-darwin
-#            bin: rocksdb_server
-#            name: rocksdb_server-Darwin-aarch64.tar.gz
-#            command: build
+          - release_for: Linux-aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+            bin: rocksdb_server
+            name: rocksdb_server-Linux-aarch64-musl.tar.gz
+            command: build
+
+          - release_for: Linux-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+            bin: rocksdb_server
+            name: rocksdb_server-Linux-x86_64-musl.tar.gz
+            command: build
+
+          - release_for: Linux-i686
+            os: ubuntu-20.04
+            target: i686-unknown-linux-musl
+            bin: rocksdb_server
+            name: rocksdb_server-Linux-i686-musl.tar.gz
+            command: build
+
+          - release_for: Windows-aarch64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bin: rocksdb_server.exe
+            name: rocksdb_server-Windows-aarch64.zip
+            command: build
+
+          - release_for: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: rocksdb_server.exe
+            name: rocksdb_server-Windows-x86_64.zip
+            command: build
+
+          - release_for: macOS-x86_64
+            os: macOS-latest
+            target: x86_64-apple-darwin
+            bin: rocksdb_server
+            name: rocksdb_server-Darwin-x86_64.tar.gz
+            command: build
+
+          - release_for: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: rocksdb_server
+            name: rocksdb_server-Darwin-aarch64.tar.gz
+            command: build
 
     steps:
       - name: Checkout repository
@@ -197,7 +197,7 @@ jobs:
         with:
           tag_name: server-v${{ env.version }}
           name: Server Release ${{ env.version }}
-          draft: true
+          draft: false
           prerelease: false
           files: "rocksdb_server-*"
           body_path: Changes.md
