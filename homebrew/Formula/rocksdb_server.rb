@@ -30,6 +30,9 @@ class RocksdbServer < Formula
         export ROCKSDB_PATH=${ROCKSDB_PATH:-#{var}/rocksdb/db}
         export ROCKSDB_PORT=${ROCKSDB_PORT:-12345}
         export ROCKSDB_LOCK_FILE=${ROCKSDB_LOCK_FILE:-#{var}/rocksdb/rocksdb.lock}
+
+        mkdir -p $(dirname $ROCKSDB_PATH)
+
         exec #{opt_bin}/rocksdb_server --dbpath $ROCKSDB_PATH --port $ROCKSDB_PORT --lock-file $ROCKSDB_LOCK_FILE --host 127.0.0.1 --log-level info
       EOS
       chmod 0755, bin/"rocksdb_server_wrapper"
