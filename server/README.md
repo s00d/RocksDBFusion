@@ -284,36 +284,6 @@ To roll back a transaction:
 }
 ```
 
-## Homebrew Tap for RocksDBFusion Server
-
-This repository contains the Homebrew formula for installing RocksDBFusion Server.
-
-### How to Use
-
-First, you need to tap this repository:
-
-```sh
-brew tap s00d/rocksdbserver
-```
-
-Once the repository is tapped, you can install RocksDBFusion Server with the following command:
-
-```sh
-brew install rocksdb_server
-```
-
-After installation, you can start the server with:
-
-```sh
-rocksdb_server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
-```
-
-Or start it as a service with:
-
-```sh
-brew services start rocksdb_server
-```
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
