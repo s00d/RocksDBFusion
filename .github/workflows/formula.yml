@@ -64,7 +64,7 @@ jobs:
           LINUX_AARCH64_SHA256=${{ env.LINUX_AARCH64_SHA256 }}
 
           echo "Updating formula at $FORMULA_FILE with version $VERSION"
-          run: ls -l
+          ls -l
           
           sed -i "s|version \".*\"|version \"${VERSION}\"|" "$FORMULA_FILE"
           sed -i "s|url \".*Darwin-x86_64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz\"|" "$FORMULA_FILE"
