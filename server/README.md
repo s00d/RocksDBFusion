@@ -25,6 +25,8 @@ This project provides a simple server implementation for RocksDB, a persistent k
 
 ### Installation
 
+#### From Source
+
 1. Clone the repository:
    ```sh
    git clone https://github.com/your-repo/rocksdb-server.git
@@ -36,12 +38,24 @@ This project provides a simple server implementation for RocksDB, a persistent k
    cargo build --release
    ```
 
+#### Using Homebrew
+
+1. Tap the repository:
+   ```sh
+   brew tap s00d/rocksdbserver
+   ```
+
+2. Install RocksDBFusion Server:
+   ```sh
+   brew install rocksdb_server
+   ```
+
 ### Running the Server
 
 To start the RocksDB server, use the following command:
 
 ```sh
-./target/release/rocksdb-server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
+rocksdb_server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
 ```
 
 ### Command-Line Options
@@ -54,7 +68,7 @@ To start the RocksDB server, use the following command:
 - `--log-level <LEVEL>`: Logging level (debug, info, warn, error)
 - `--lock-file <FILE>`: Path to the lock file
 
-### macos sign
+### macOS Sign
 
 ```bash
 chmod +x ./server-0.1.1-aarch64-apple-darwin
@@ -218,6 +232,36 @@ To roll back a transaction:
   "action": "rollback_transaction",
   "txn_id": 1
 }
+```
+
+## Homebrew Tap for RocksDBFusion Server
+
+This repository contains the Homebrew formula for installing RocksDBFusion Server.
+
+### How to Use
+
+First, you need to tap this repository:
+
+```sh
+brew tap s00d/rocksdbserver
+```
+
+Once the repository is tapped, you can install RocksDBFusion Server with the following command:
+
+```sh
+brew install rocksdb_server
+```
+
+After installation, you can start the server with:
+
+```sh
+rocksdb_server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
+```
+
+Or start it as a service with:
+
+```sh
+brew services start rocksdb_server
 ```
 
 ## License
