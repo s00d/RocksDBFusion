@@ -50,6 +50,10 @@ jobs:
           LINUX_AARCH64_SHA256=$(curl -L $LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
           
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256" >> $GITHUB_ENV
+          echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256" >> $GITHUB_ENV
+          echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256" >> $GITHUB_ENV
+          echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256" >> $GITHUB_ENV
           
           # Отладочный вывод
           echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256"
