@@ -69,11 +69,11 @@ jobs:
 
           echo "Updating formula at $FORMULA_FILE with version $VERSION"
           
-          sed -i "s|version \".*\"|version \"${VERSION}\"|g" "$FORMULA_FILE"
-          sed -i "s|sha256 \".*\"|sha256 \"{MACOS_X86_64_SHA256}\"|" "$FORMULA_FILE"
-          sed -i "s|sha256 \".*\"|sha256 \"{MACOS_AARCH64_SHA256}\"|" "$FORMULA_FILE"
-          sed -i "s|sha256 \".*\"|sha256 \"{LINUX_X86_64_SHA256}\"|" "$FORMULA_FILE"
-          sed -i "s|sha256 \".*\"|sha256 \"{LINUX_AARCH64_SHA256}\"|" "$FORMULA_FILE"
+          sed -i "s|{VERSION}|${VERSION}|g" "$FORMULA_FILE"
+          sed -i "s|{MACOS_X86_64_SHA256}|${MACOS_X86_64_SHA256}|g" "$FORMULA_FILE"
+          sed -i "s|{MACOS_AARCH64_SHA256}|${MACOS_AARCH64_SHA256}|g" "$FORMULA_FILE"
+          sed -i "s|{LINUX_X86_64_SHA256}|${LINUX_X86_64_SHA256}|g" "$FORMULA_FILE"
+          sed -i "s|{LINUX_AARCH64_SHA256}|${LINUX_AARCH64_SHA256}|g" "$FORMULA_FILE"
           
           git -C homebrew-tap config user.name "github-actions"
           git -C homebrew-tap config user.email "github-actions@github.com"
