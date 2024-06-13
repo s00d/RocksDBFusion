@@ -10,6 +10,11 @@ A simple Tauri application to view and interact with a RocksDB database. This ap
 - Pagination for large datasets
 - Search functionality
 
+## Screenshots
+
+![Screenshot 1](https://raw.githubusercontent.com/s00d/RocksDBFusion/main/rocksdb-viewer/img/img1.png)
+![Screenshot 2](https://raw.githubusercontent.com/s00d/RocksDBFusion/main/rocksdb-viewer/img/img2.png)
+
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install)
@@ -43,7 +48,7 @@ npm run tauri dev
 npm run tauri build
 ```
 
-### macos sign
+### macOS sign
 
 ```bash
 xattr -cr ./rocksdb-viewer.app && codesign --force --deep --sign - ./rocksdb-viewer.app
