@@ -31,6 +31,9 @@ jobs:
       - name: Copy formula to Homebrew Tap
         run: cp homebrew/Formula/rocksdb_fusion.rb homebrew-tap/Formula/
 
+      - name: List files in Homebrew Tap directory
+        run: ls -l homebrew-tap/Formula/
+
       - name: Get version
         id: version
         run: |
@@ -40,7 +43,7 @@ jobs:
       - name: Calculate SHA256 checksums
         id: sha256
         run: |
-          VERSION=${{ env.version }}
+          VERSION=$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           MACOS_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz"
           MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz"
           LINUX_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz"
@@ -55,6 +58,7 @@ jobs:
           echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256" >> $GITHUB_ENV
           echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256" >> $GITHUB_ENV
           echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Update Homebrew Formula
         run: |
