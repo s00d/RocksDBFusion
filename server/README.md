@@ -1,3 +1,6 @@
+Вот обновленный README.md с информацией о том, как запустить сервер как службу на Linux:
+
+```markdown
 # RocksDB Server
 
 ## Overview
@@ -38,36 +41,118 @@ This project provides a simple server implementation for RocksDB, a persistent k
    cargo build --release
    ```
 
-#### Using Homebrew
 
-1. Tap the repository:
+## Homebrew Tap for RocksDBFusion Server
+
+This repository contains the Homebrew formula for installing RocksDBFusion Server.
+
+### How to Use
+
+First, you need to tap this repository:
+
+```sh
+brew tap s00d/rocksdbserver
+```
+
+Once the repository is tapped, you can install RocksDBFusion Server with the following command:
+
+```sh
+brew install rocksdb_server
+```
+
+After installation, you can start the server with:
+
+```sh
+rocksdb_server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
+```
+
+Or start it as a service with:
+
+```sh
+export ROCKSDB_PATH="$(brew --prefix)/var/rocksdb/db"
+export ROCKSDB_PORT=12345
+export ROCKSDB_LOCK_FILE="$(brew --prefix)/var/rocksdb/rocksdb.lock"
+
+brew services start rocksdb_server
+```
+
+### Environment Variables
+
+- `ROCKSDB_PATH`: Path to the RocksDB database (default: `$(brew --prefix)/var/rocksdb/db`)
+- `ROCKSDB_PORT`: Port to listen on (default: `12345`)
+- `ROCKSDB_LOCK_FILE`: Path to the lock file (default: `$(brew --prefix)/var/rocksdb/rocksdb.lock`)
+
+### Finding Logs
+
+To find the logs for the RocksDB server, use the following command:
+
+```sh
+tail -f $(brew --prefix)/var/log/rocksdb_server.log
+```
+
+### Finding the Database Directory
+
+The RocksDB server stores its data in the `var/rocksdb/db` directory under the Homebrew prefix. To find and navigate to this directory, use the following commands:
+
+1. Find the Homebrew prefix:
    ```sh
-   brew tap s00d/rocksdbserver
+   brew --prefix
    ```
 
-2. Install RocksDBFusion Server:
+   This will output the Homebrew prefix, for example, `/usr/local`.
+
+2. Navigate to the `rocksdb` data directory:
    ```sh
-   brew install rocksdb_server
+   cd $(brew --prefix)/var/rocksdb
    ```
 
-3. Configure environment variables for the service:
+### macOS Sign
 
-   - Set the path to the RocksDB database:
-     ```sh
-     export ROCKSDB_PATH="$(brew --prefix)/var/rocksdb/db"
-     ```
-   - Set the port for the server:
-     ```sh
-     export ROCKSDB_PORT=12345
-     ```
-   - Set the path to the lock file:
-     ```sh
-     export ROCKSDB_LOCK_FILE="$(brew --prefix)/var/rocksdb/rocksdb.lock"
-     ```
+```bash
+chmod +x ./server-0.1.2-aarch64-apple-darwin
+xattr -cr ./server-0.1.2-aarch64-apple-darwin && codesign --force --deep --sign - ./server-0.1.2-aarch64-apple-darwin
+```
 
-4. Start the server as a service:
+
+### Using systemd on Linux
+
+1. Create a systemd service file:
+
    ```sh
-   brew services start rocksdb_server
+   sudo nano /etc/systemd/system/rocksdb_server.service
+   ```
+
+2. Add the following content to the service file:
+
+   ```ini
+   [Unit]
+   Description=RocksDB Server
+   After=network.target
+
+   [Service]
+   Environment="ROCKSDB_PATH=${ROCKSDB_PATH:-/var/rocksdb/db}"
+   Environment="ROCKSDB_PORT=${ROCKSDB_PORT:-12345}"
+   Environment="ROCKSDB_LOCK_FILE=${ROCKSDB_LOCK_FILE:-/var/rocksdb/rocksdb.lock}"
+   ExecStart=/usr/local/bin/rocksdb_server --dbpath $ROCKSDB_PATH --port $ROCKSDB_PORT --lock-file $ROCKSDB_LOCK_FILE --host 127.0.0.1 --log-level info
+   Restart=always
+   User=nobody
+   Group=nogroup
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+3. Reload systemd to apply the new service:
+
+   ```sh
+   sudo systemctl daemon-reload
+   ```
+
+4. Enable and start the RocksDB server service:
+
+   ```sh
+   sudo systemctl enable rocksdb_server
+   sudo systemctl start rocksdb_server
    ```
 
 ### Finding Logs
@@ -98,7 +183,6 @@ The RocksDB server stores its data in the `var/rocksdb/db` directory under the H
    ```sh
    mkdir -p $(brew --prefix)/var/rocksdb/db
    ```
-
 
 ### Running the Server
 
