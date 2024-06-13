@@ -25,9 +25,11 @@ jobs:
           repository: s00d/homebrew-rocksdbfusion
           path: homebrew-tap
 
+      - name: Create Formula Directory if it does not exist
+        run: mkdir -p homebrew-tap/Formula
+
       - name: Copy formula to Homebrew Tap
-        run: |
-          cp homebrew/Formula/rocksdb_fusion.rb homebrew-tap/Formula/
+        run: cp homebrew/Formula/rocksdb_fusion.rb homebrew-tap/Formula/
 
       - name: Get version
         id: version
