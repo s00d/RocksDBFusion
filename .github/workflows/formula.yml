@@ -1,0 +1,68 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-formula:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version from file
+        id: read_version
+        run: echo "::set-output name=version::$(cat VERSION)"
+
+      - name: Calculate SHA256 checksums
+        id: sha256
+        run: |
+          VERSION=${{ steps.read_version.outputs.version }}
+          MACOS_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz"
+          MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz"
+          LINUX_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz"
+          LINUX_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz"
+          
+          MACOS_X86_64_SHA256=$(curl -L $MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
+          MACOS_AARCH64_SHA256=$(curl -L $MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+          LINUX_X86_64_SHA256=$(curl -L $LINUX_X86_64_URL | shasum -a 256 | awk '{print $1}')
+          LINUX_AARCH64_SHA256=$(curl -L $LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+          
+          echo "::set-output name=macos_x86_64_sha256::$MACOS_X86_64_SHA256"
+          echo "::set-output name=macos_aarch64_sha256::$MACOS_AARCH64_SHA256"
+          echo "::set-output name=linux_x86_64_sha256::$LINUX_X86_64_SHA256"
+          echo "::set-output name=linux_aarch64_sha256::$LINUX_AARCH64_SHA256"
+
+      - name: Update Homebrew Formula
+        run: |
+          FORMULA_FILE=homebrew/Formula/rocksdb_fusion.rb
+          VERSION=${{ steps.read_version.outputs.version }}
+          MACOS_X86_64_SHA256=${{ steps.sha256.outputs.macos_x86_64_sha256 }}
+          MACOS_AARCH64_SHA256=${{ steps.sha256.outputs.macos_aarch64_sha256 }}
+          LINUX_X86_64_SHA256=${{ steps.sha256.outputs.linux_x86_64_sha256 }}
+          LINUX_AARCH64_SHA256=${{ steps.sha256.outputs.linux_aarch64_sha256 }}
+
+          sed -i "s|version \".*\"|version \"${VERSION}\"|" $FORMULA_FILE
+          sed -i "s|url \".*Darwin-x86_64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz\"|" $FORMULA_FILE
+          sed -i "s|sha256 \".*\"|sha256 \"${MACOS_X86_64_SHA256}\"|" $FORMULA_FILE
+          sed -i "s|url \".*Darwin-aarch64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz\"|" $FORMULA_FILE
+          sed -i "s|sha256 \".*\"|sha256 \"${MACOS_AARCH64_SHA256}\"|" $FORMULA_FILE
+          sed -i "s|url \".*Linux-x86_64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz\"|" $FORMULA_FILE
+          sed -i "s|sha256 \".*\"|sha256 \"${LINUX_X86_64_SHA256}\"|" $FORMULA_FILE
+          sed -i "s|url \".*Linux-aarch64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz\"|" $FORMULA_FILE
+          sed -i "s|sha256 \".*\"|sha256 \"${LINUX_AARCH64_SHA256}\"|" $FORMULA_FILE
+          
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add $FORMULA_FILE
+          git commit -m "Update Homebrew formula for version $VERSION"
+          git push origin main
