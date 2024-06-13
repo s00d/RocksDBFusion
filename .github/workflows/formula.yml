@@ -34,13 +34,7 @@ jobs:
       - name: List files in Homebrew Tap directory
         run: ls -l homebrew-tap/Formula/
 
-      - name: Get version
-        id: version
-        run: |
-          version=$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          echo "version=$version" >> $GITHUB_ENV
-
-      - name: Calculate SHA256 checksums
+      - name: Calculate SHA256 checksums and set version
         id: sha256
         run: |
           VERSION=$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
@@ -62,26 +56,28 @@ jobs:
 
       - name: Update Homebrew Formula
         run: |
-          FORMULA_FILE=homebrew-tap/Formula/rocksdb_fusion.rb
-          VERSION=${{ env.version }}
+          FORMULA_FILE="homebrew-tap/Formula/rocksdb_fusion.rb"
+          VERSION=${{ env.VERSION }}
           MACOS_X86_64_SHA256=${{ env.MACOS_X86_64_SHA256 }}
           MACOS_AARCH64_SHA256=${{ env.MACOS_AARCH64_SHA256 }}
           LINUX_X86_64_SHA256=${{ env.LINUX_X86_64_SHA256 }}
           LINUX_AARCH64_SHA256=${{ env.LINUX_AARCH64_SHA256 }}
 
-          sed -i "s|version \".*\"|version \"${VERSION}\"|" $FORMULA_FILE
-          sed -i "s|url \".*Darwin-x86_64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz\"|" $FORMULA_FILE
-          sed -i "s|sha256 \".*\"|sha256 \"${MACOS_X86_64_SHA256}\"|" $FORMULA_FILE
-          sed -i "s|url \".*Darwin-aarch64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz\"|" $FORMULA_FILE
-          sed -i "s|sha256 \".*\"|sha256 \"${MACOS_AARCH64_SHA256}\"|" $FORMULA_FILE
-          sed -i "s|url \".*Linux-x86_64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz\"|" $FORMULA_FILE
-          sed -i "s|sha256 \".*\"|sha256 \"${LINUX_X86_64_SHA256}\"|" $FORMULA_FILE
-          sed -i "s|url \".*Linux-aarch64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz\"|" $FORMULA_FILE
-          sed -i "s|sha256 \".*\"|sha256 \"${LINUX_AARCH64_SHA256}\"|" $FORMULA_FILE
+          echo "Updating formula at $FORMULA_FILE with version $VERSION"
+          
+          sed -i "s|version \".*\"|version \"${VERSION}\"|" "$FORMULA_FILE"
+          sed -i "s|url \".*Darwin-x86_64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz\"|" "$FORMULA_FILE"
+          sed -i "s|sha256 \".*\"|sha256 \"${MACOS_X86_64_SHA256}\"|" "$FORMULA_FILE"
+          sed -i "s|url \".*Darwin-aarch64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz\"|" "$FORMULA_FILE"
+          sed -i "s|sha256 \".*\"|sha256 \"${MACOS_AARCH64_SHA256}\"|" "$FORMULA_FILE"
+          sed -i "s|url \".*Linux-x86_64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz\"|" "$FORMULA_FILE"
+          sed -i "s|sha256 \".*\"|sha256 \"${LINUX_X86_64_SHA256}\"|" "$FORMULA_FILE"
+          sed -i "s|url \".*Linux-aarch64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz\"|" "$FORMULA_FILE"
+          sed -i "s|sha256 \".*\"|sha256 \"${LINUX_AARCH64_SHA256}\"|" "$FORMULA_FILE"
           
           cd homebrew-tap
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git add $FORMULA_FILE
+          git add "$FORMULA_FILE"
           git commit -m "Update Homebrew formula for version $VERSION"
           git push origin main
