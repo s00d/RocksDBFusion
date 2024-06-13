@@ -1,4 +1,4 @@
-name: Build and Release
+name: Update Homebrew Formula
 
 on:
   push:
@@ -18,6 +18,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Checkout Homebrew Tap
+        uses: actions/checkout@v4
+        with:
+          repository: s00d/homebrew-rocksdbfusion
+          path: homebrew-tap
 
       - name: Read version from file
         id: read_version
@@ -44,7 +50,7 @@ jobs:
 
       - name: Update Homebrew Formula
         run: |
-          FORMULA_FILE=homebrew/Formula/rocksdb_server.rb
+          FORMULA_FILE=homebrew-tap/Formula/rocksdb_fusion.rb
           VERSION=${{ steps.read_version.outputs.version }}
           MACOS_X86_64_SHA256=${{ steps.sha256.outputs.macos_x86_64_sha256 }}
           MACOS_AARCH64_SHA256=${{ steps.sha256.outputs.macos_aarch64_sha256 }}
@@ -61,6 +67,7 @@ jobs:
           sed -i "s|url \".*Linux-aarch64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz\"|" $FORMULA_FILE
           sed -i "s|sha256 \".*\"|sha256 \"${LINUX_AARCH64_SHA256}\"|" $FORMULA_FILE
           
+          cd homebrew-tap
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add $FORMULA_FILE
