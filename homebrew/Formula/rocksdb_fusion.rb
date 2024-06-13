@@ -1,7 +1,7 @@
 class RocksdbFusion < Formula
   desc "RocksDB server is designed to handle database operations over TCP connections"
   homepage "https://github.com/s00d/RocksDBFusion"
-  version "{version}"  # Эта версия будет заменена через GitHub Actions
+  version "{VERSION}"  # Эта версия будет заменена через GitHub Actions
 
   on_macos do
     if Hardware::CPU.intel?
