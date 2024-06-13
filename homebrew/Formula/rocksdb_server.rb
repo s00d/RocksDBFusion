@@ -28,7 +28,16 @@ class RocksdbServer < Formula
   end
 
   service do
-      run [opt_bin/"rocksdb_server"]
+      environment_variables ROCKSDB_PATH: "#{var}/rocksdb/db", ROCKSDB_PORT: "12345", ROCKSDB_LOCK_FILE: "#{var}/rocksdb/rocksdb.lock"
+
+      run [
+        opt_bin/"rocksdb_server",
+        "--dbpath", "${PATH_TO_DB}",
+        "--port", "${PORT}",
+        "--lock-file", "${LOCK_FILE}",
+        "--host", "127.0.0.1",
+        "--log-level", "info"
+      ]
       keep_alive true
       working_dir var
       log_path var/"log/rocksdb_server.log"
