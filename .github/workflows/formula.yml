@@ -44,7 +44,7 @@ jobs:
 
       - name: Update Homebrew Formula
         run: |
-          FORMULA_FILE=homebrew/Formula/rocksdb_fusion.rb
+          FORMULA_FILE=homebrew/Formula/rocksdb_server.rb
           VERSION=${{ steps.read_version.outputs.version }}
           MACOS_X86_64_SHA256=${{ steps.sha256.outputs.macos_x86_64_sha256 }}
           MACOS_AARCH64_SHA256=${{ steps.sha256.outputs.macos_aarch64_sha256 }}

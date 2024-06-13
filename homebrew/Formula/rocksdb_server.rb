@@ -1,5 +1,5 @@
 class RocksdbFusion < Formula
-  desc "Description of RocksDBFusion"
+  desc "RocksDB server is designed to handle database operations over TCP connections"
   homepage "https://github.com/s00d/RocksDBFusion"
   version "#{version}"  # Эта версия будет заменена через GitHub Actions
 
