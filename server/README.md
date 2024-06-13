@@ -50,6 +50,56 @@ This project provides a simple server implementation for RocksDB, a persistent k
    brew install rocksdb_server
    ```
 
+3. Configure environment variables for the service:
+
+   - Set the path to the RocksDB database:
+     ```sh
+     export ROCKSDB_PATH="$(brew --prefix)/var/rocksdb/db"
+     ```
+   - Set the port for the server:
+     ```sh
+     export ROCKSDB_PORT=12345
+     ```
+   - Set the path to the lock file:
+     ```sh
+     export ROCKSDB_LOCK_FILE="$(brew --prefix)/var/rocksdb/rocksdb.lock"
+     ```
+
+4. Start the server as a service:
+   ```sh
+   brew services start rocksdb_server
+   ```
+
+### Finding Logs
+
+To find the logs for the RocksDB server, use the following command:
+
+```sh
+tail -f $(brew --prefix)/var/log/rocksdb_server.log
+```
+
+### Finding the Database Directory
+
+The RocksDB server stores its data in the `var/rocksdb/db` directory under the Homebrew prefix. To find and navigate to this directory, use the following commands:
+
+1. Find the Homebrew prefix:
+   ```sh
+   brew --prefix
+   ```
+
+   This will output the Homebrew prefix, for example, `/usr/local`.
+
+2. Navigate to the `rocksdb` data directory:
+   ```sh
+   cd $(brew --prefix)/var/rocksdb/db
+   ```
+
+3. If the directory does not exist, you can create it:
+   ```sh
+   mkdir -p $(brew --prefix)/var/rocksdb/db
+   ```
+
+
 ### Running the Server
 
 To start the RocksDB server, use the following command:
