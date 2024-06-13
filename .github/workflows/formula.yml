@@ -1,86 +1,86 @@
-name: Update Homebrew Formula
-
-on:
-  push:
-    branches:
-      - main
-  release:
-    types: [published]
-
-permissions:
-  contents: write
-
-jobs:
-  update-formula:
-    name: Update Homebrew Formula
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout current repository
-        uses: actions/checkout@v4
-
-      - name: Checkout Homebrew Tap
-        uses: actions/checkout@v4
-        with:
-          repository: s00d/homebrew-rocksdbserver
-          path: homebrew-tap
-          token: ${{ secrets.GH_TOKEN }}
-
-      - name: Create Formula Directory if it does not exist
-        run: mkdir -p homebrew-tap/Formula
-
-      - name: Copy formula to Homebrew Tap
-        run: cp homebrew/Formula/rocksdb_server.rb homebrew-tap/Formula/
-
-      - name: List files in Homebrew Tap directory
-        run: ls -l homebrew-tap/Formula/
-
-      - name: Calculate SHA256 checksums and set version
-        id: sha256
-        run: |
-          VERSION=$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          MACOS_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz"
-          MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz"
-          LINUX_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz"
-          LINUX_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz"
-          
-          MACOS_X86_64_SHA256=$(curl -L $MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
-          MACOS_AARCH64_SHA256=$(curl -L $MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
-          LINUX_X86_64_SHA256=$(curl -L $LINUX_X86_64_URL | shasum -a 256 | awk '{print $1}')
-          LINUX_AARCH64_SHA256=$(curl -L $LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
-          
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256" >> $GITHUB_ENV
-          echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256" >> $GITHUB_ENV
-          echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256" >> $GITHUB_ENV
-          echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256" >> $GITHUB_ENV
-          
-          # Отладочный вывод
-          echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256"
-          echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256"
-          echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256"
-          echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256"
-          echo "VERSION=$VERSION"
-
-      - name: Update Homebrew Formula
-        run: |
-          FORMULA_FILE="homebrew-tap/Formula/rocksdb_server.rb"
-          VERSION=${{ env.VERSION }}
-          MACOS_X86_64_SHA256=${{ env.MACOS_X86_64_SHA256 }}
-          MACOS_AARCH64_SHA256=${{ env.MACOS_AARCH64_SHA256 }}
-          LINUX_X86_64_SHA256=${{ env.LINUX_X86_64_SHA256 }}
-          LINUX_AARCH64_SHA256=${{ env.LINUX_AARCH64_SHA256 }}
-
-          echo "Updating formula at $FORMULA_FILE with version $VERSION"
-          
-          sed -i "s|{VERSION}|${VERSION}|g" "$FORMULA_FILE"
-          sed -i "s|{MACOS_X86_64_SHA256}|${MACOS_X86_64_SHA256}|g" "$FORMULA_FILE"
-          sed -i "s|{MACOS_AARCH64_SHA256}|${MACOS_AARCH64_SHA256}|g" "$FORMULA_FILE"
-          sed -i "s|{LINUX_X86_64_SHA256}|${LINUX_X86_64_SHA256}|g" "$FORMULA_FILE"
-          sed -i "s|{LINUX_AARCH64_SHA256}|${LINUX_AARCH64_SHA256}|g" "$FORMULA_FILE"
-          
-          git -C homebrew-tap config user.name "github-actions"
-          git -C homebrew-tap config user.email "github-actions@github.com"
-          git -C homebrew-tap add Formula/rocksdb_server.rb
-          git -C homebrew-tap commit -m "Update Homebrew formula for version $VERSION"
-          git -C homebrew-tap push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/s00d/homebrew-rocksdbserver.git main
+#name: Update Homebrew Formula
+#
+#on:
+#  push:
+#    branches:
+#      - main
+#  release:
+#    types: [published]
+#
+#permissions:
+#  contents: write
+#
+#jobs:
+#  update-formula:
+#    name: Update Homebrew Formula
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Checkout current repository
+#        uses: actions/checkout@v4
+#
+#      - name: Checkout Homebrew Tap
+#        uses: actions/checkout@v4
+#        with:
+#          repository: s00d/homebrew-rocksdbserver
+#          path: homebrew-tap
+#          token: ${{ secrets.GH_TOKEN }}
+#
+#      - name: Create Formula Directory if it does not exist
+#        run: mkdir -p homebrew-tap/Formula
+#
+#      - name: Copy formula to Homebrew Tap
+#        run: cp homebrew/Formula/rocksdb_server.rb homebrew-tap/Formula/
+#
+#      - name: List files in Homebrew Tap directory
+#        run: ls -l homebrew-tap/Formula/
+#
+#      - name: Calculate SHA256 checksums and set version
+#        id: sha256
+#        run: |
+#          VERSION=$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+#          MACOS_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz"
+#          MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz"
+#          LINUX_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz"
+#          LINUX_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz"
+#
+#          MACOS_X86_64_SHA256=$(curl -L $MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
+#          MACOS_AARCH64_SHA256=$(curl -L $MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+#          LINUX_X86_64_SHA256=$(curl -L $LINUX_X86_64_URL | shasum -a 256 | awk '{print $1}')
+#          LINUX_AARCH64_SHA256=$(curl -L $LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+#
+#          echo "VERSION=$VERSION" >> $GITHUB_ENV
+#          echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256" >> $GITHUB_ENV
+#          echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256" >> $GITHUB_ENV
+#          echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256" >> $GITHUB_ENV
+#          echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256" >> $GITHUB_ENV
+#
+#          # Отладочный вывод
+#          echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256"
+#          echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256"
+#          echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256"
+#          echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256"
+#          echo "VERSION=$VERSION"
+#
+#      - name: Update Homebrew Formula
+#        run: |
+#          FORMULA_FILE="homebrew-tap/Formula/rocksdb_server.rb"
+#          VERSION=${{ env.VERSION }}
+#          MACOS_X86_64_SHA256=${{ env.MACOS_X86_64_SHA256 }}
+#          MACOS_AARCH64_SHA256=${{ env.MACOS_AARCH64_SHA256 }}
+#          LINUX_X86_64_SHA256=${{ env.LINUX_X86_64_SHA256 }}
+#          LINUX_AARCH64_SHA256=${{ env.LINUX_AARCH64_SHA256 }}
+#
+#          echo "Updating formula at $FORMULA_FILE with version $VERSION"
+#
+#          sed -i "s|{VERSION}|${VERSION}|g" "$FORMULA_FILE"
+#          sed -i "s|{MACOS_X86_64_SHA256}|${MACOS_X86_64_SHA256}|g" "$FORMULA_FILE"
+#          sed -i "s|{MACOS_AARCH64_SHA256}|${MACOS_AARCH64_SHA256}|g" "$FORMULA_FILE"
+#          sed -i "s|{LINUX_X86_64_SHA256}|${LINUX_X86_64_SHA256}|g" "$FORMULA_FILE"
+#          sed -i "s|{LINUX_AARCH64_SHA256}|${LINUX_AARCH64_SHA256}|g" "$FORMULA_FILE"
+#
+#          git -C homebrew-tap config user.name "github-actions"
+#          git -C homebrew-tap config user.email "github-actions@github.com"
+#          git -C homebrew-tap add Formula/rocksdb_server.rb
+#          git -C homebrew-tap commit -m "Update Homebrew formula for version $VERSION"
+#          git -C homebrew-tap push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/s00d/homebrew-rocksdbserver.git main

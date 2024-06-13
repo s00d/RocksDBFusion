@@ -23,7 +23,7 @@ struct Opt {
 
     /// Port to listen on
     #[structopt(long, short, default_value = "12345")]
-    port: u16,
+    port: String,
 
     /// Host to bind the server to
     #[structopt(long, default_value = "127.0.0.1")]
