@@ -24,6 +24,7 @@ jobs:
         with:
           repository: s00d/homebrew-rocksdbfusion
           path: homebrew-tap
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Create Formula Directory if it does not exist
         run: mkdir -p homebrew-tap/Formula
@@ -64,7 +65,6 @@ jobs:
           LINUX_AARCH64_SHA256=${{ env.LINUX_AARCH64_SHA256 }}
 
           echo "Updating formula at $FORMULA_FILE with version $VERSION"
-          ls -l
           
           sed -i "s|version \".*\"|version \"${VERSION}\"|" "$FORMULA_FILE"
           sed -i "s|url \".*Darwin-x86_64.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz\"|" "$FORMULA_FILE"
@@ -76,8 +76,8 @@ jobs:
           sed -i "s|url \".*Linux-aarch64-musl.tar.gz\"|url \"https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz\"|" "$FORMULA_FILE"
           sed -i "s|sha256 \".*\"|sha256 \"${LINUX_AARCH64_SHA256}\"|" "$FORMULA_FILE"
           
-          git -C homebrew-tap config --global user.name "github-actions"
-          git -C homebrew-tap config --global user.email "github-actions@github.com"
+          git -C homebrew-tap config user.name "github-actions"
+          git -C homebrew-tap config user.email "github-actions@github.com"
           git -C homebrew-tap add Formula/rocksdb_fusion.rb
           git -C homebrew-tap commit -m "Update Homebrew formula for version $VERSION"
-          git -C homebrew-tap push origin main
+          git -C homebrew-tap push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/s00d/homebrew-rocksdbfusion.git main
