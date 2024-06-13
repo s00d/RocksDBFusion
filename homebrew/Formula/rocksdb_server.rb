@@ -24,24 +24,24 @@ class RocksdbServer < Formula
   end
 
   def install
-    bin.install "rocksdb_server"
-  end
+      bin.install "rocksdb_server"
+      (bin/"rocksdb_server_wrapper").write <<~EOS
+        #!/bin/bash
+        export ROCKSDB_PATH=${ROCKSDB_PATH:-#{var}/rocksdb/db}
+        export ROCKSDB_PORT=${ROCKSDB_PORT:-12345}
+        export ROCKSDB_LOCK_FILE=${ROCKSDB_LOCK_FILE:-#{var}/rocksdb/rocksdb.lock}
+        exec #{opt_bin}/rocksdb_server --dbpath $ROCKSDB_PATH --port $ROCKSDB_PORT --lock-file $ROCKSDB_LOCK_FILE --host 127.0.0.1 --log-level info
+      EOS
+      chmod 0755, bin/"rocksdb_server_wrapper"
+    end
 
-  service do
-      environment_variables ROCKSDB_PATH: "#{var}/rocksdb/db", ROCKSDB_PORT: "12345", ROCKSDB_LOCK_FILE: "#{var}/rocksdb/rocksdb.lock"
-
-      run [
-        opt_bin/"rocksdb_server",
-        "--dbpath", "${ROCKSDB_PATH}",
-        "--port", "${ROCKSDB_PORT}",
-        "--lock-file", "${ROCKSDB_LOCK_FILE}",
-        "--host", "127.0.0.1",
-        "--log-level", "info"
-      ]
+    service do
+      run [opt_bin/"rocksdb_server_wrapper"]
       keep_alive true
       working_dir var
       log_path var/"log/rocksdb_server.log"
       error_log_path var/"log/rocksdb_server.log"
+      run_type :immediate
     end
 
   test do
