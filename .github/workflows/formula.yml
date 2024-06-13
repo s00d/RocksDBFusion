@@ -22,7 +22,7 @@ jobs:
       - name: Checkout Homebrew Tap
         uses: actions/checkout@v4
         with:
-          repository: s00d/homebrew-rocksdbfusion
+          repository: s00d/homebrew-rocksdbserver
           path: homebrew-tap
           token: ${{ secrets.GH_TOKEN }}
 
@@ -30,7 +30,7 @@ jobs:
         run: mkdir -p homebrew-tap/Formula
 
       - name: Copy formula to Homebrew Tap
-        run: cp homebrew/Formula/rocksdb_fusion.rb homebrew-tap/Formula/
+        run: cp homebrew/Formula/rocksdb_server.rb homebrew-tap/Formula/
 
       - name: List files in Homebrew Tap directory
         run: ls -l homebrew-tap/Formula/
@@ -64,7 +64,7 @@ jobs:
 
       - name: Update Homebrew Formula
         run: |
-          FORMULA_FILE="homebrew-tap/Formula/rocksdb_fusion.rb"
+          FORMULA_FILE="homebrew-tap/Formula/rocksdb_server.rb"
           VERSION=${{ env.VERSION }}
           MACOS_X86_64_SHA256=${{ env.MACOS_X86_64_SHA256 }}
           MACOS_AARCH64_SHA256=${{ env.MACOS_AARCH64_SHA256 }}
@@ -81,6 +81,6 @@ jobs:
           
           git -C homebrew-tap config user.name "github-actions"
           git -C homebrew-tap config user.email "github-actions@github.com"
-          git -C homebrew-tap add Formula/rocksdb_fusion.rb
+          git -C homebrew-tap add Formula/rocksdb_server.rb
           git -C homebrew-tap commit -m "Update Homebrew formula for version $VERSION"
-          git -C homebrew-tap push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/s00d/homebrew-rocksdbfusion.git main
+          git -C homebrew-tap push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/s00d/homebrew-rocksdbserver.git main
