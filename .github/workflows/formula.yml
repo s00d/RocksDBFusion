@@ -7,7 +7,6 @@ on:
   release:
     types: [published]
 
-
 permissions:
   contents: write
 
@@ -17,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout current repository
         uses: actions/checkout@v4
 
       - name: Checkout Homebrew Tap
@@ -26,8 +25,11 @@ jobs:
           repository: s00d/homebrew-rocksdbfusion
           path: homebrew-tap
 
+      - name: Copy formula to Homebrew Tap
+        run: |
+          cp homebrew/Formula/rocksdb_fusion.rb homebrew-tap/Formula/
+
       - name: Get version
-        if: runner.os != 'Windows'
         id: version
         run: echo "version=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
 
@@ -52,7 +54,7 @@ jobs:
 
       - name: Update Homebrew Formula
         run: |
-          FORMULA_FILE=homebrew/Formula/rocksdb_fusion.rb
+          FORMULA_FILE=homebrew-tap/Formula/rocksdb_fusion.rb
           VERSION=${{ env.version }}
           MACOS_X86_64_SHA256=${{ steps.sha256.outputs.macos_x86_64_sha256 }}
           MACOS_AARCH64_SHA256=${{ steps.sha256.outputs.macos_aarch64_sha256 }}
