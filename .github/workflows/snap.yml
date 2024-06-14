@@ -10,30 +10,19 @@ jobs:
   build-and-publish-to-snap:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        platform:
+          - i386
+          - amd64
+          - armhf
+          - arm64
+          - ppc64el
+          - s390x
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup LXD
-        uses: canonical/setup-lxd@v0.1.1
-
-      - name: Setup Snapcraft
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y snapd
-          sudo snap install snapcraft --classic
-
-      - name: Build Snap for Multiple Architectures
-        run: |
-          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=amd64
-          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=arm64
-          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=armhf
-          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=ppc64el
-          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=riscv64
-          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=s390x
-
-      - name: Upload Snap
-        run: |
-          snapcraft upload --release=stable *.snap
-        env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: diddlesnaps/snapcraft-multiarch-action@v1
+        with:
+          architecture: ${{ matrix.platform }}
+          store-auth: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
