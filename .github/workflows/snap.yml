@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-and-publish-to-snap:
-    runs-on: ubuntu-latext
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
