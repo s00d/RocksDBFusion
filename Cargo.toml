@@ -1,6 +1,6 @@
 [workspace]
-members = ["server", "client", "tools/schema_generator"]
-exclude = ["rocksdb-viewer"]
+members = ["server", "client"]
+exclude = ["rocksdb-viewer", "tools/schema_generator"]
 resolver = "2"
 
 [profile.release]
