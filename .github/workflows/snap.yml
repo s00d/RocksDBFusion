@@ -21,7 +21,6 @@ jobs:
           sudo snap install multipass --classic
           sudo snap install snapcraft --classic
           sudo multipass set local.privileged-mounts=true
-          sudo systemctl start multipass
           snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
