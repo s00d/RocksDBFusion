@@ -21,7 +21,9 @@ jobs:
           sudo snap install multipass --classic
           sudo snap install snapcraft --classic
           sudo multipass set local.privileged-mounts=true
-          multipass authenticate foo
+          sudo systemctl restart snapd
+          sudo systemctl restart multipass
+          sudo multipass launch --name snapcraft-vm
           snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
