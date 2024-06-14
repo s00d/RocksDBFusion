@@ -18,7 +18,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y snapcraft
-          sudo snap install multipass --edge
+          sudo snap install multipass
+          sudo systemctl start multipass
 
       - name: Build Snap package
         run: snapcraft
