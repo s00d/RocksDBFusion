@@ -1,5 +1,3 @@
-# snapcraft && snapcraft upload --release stable *.snap
-
 name: Publish to Snap
 
 on:
@@ -15,13 +13,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-#
 
       - name: Setup Snapcraft
         run: |
           sudo snap install snapcraft --classic
-          echo "${SNAPCRAFT_STORE_CREDENTIALS}" > snap_login_file
-          snapcraft login --with snap_login_file
+          export SNAPCRAFT_STORE_CREDENTIALS="${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}"
+          snapcraft login
           snapcraft
           snapcraft upload --release=stable *.snap
         env:
