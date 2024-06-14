@@ -10,18 +10,20 @@ permissions:
 
 jobs:
   build-and-publish-to-snap:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+#
 
       - name: Setup Snapcraft
         run: |
           sudo snap install snapcraft --classic
-          echo "$SNAP_TOKEN" | snapcraft login --with -
+          echo "${SNAPCRAFT_STORE_CREDENTIALS}" > snap_login_file
+          snapcraft login --with snap_login_file
           snapcraft
           snapcraft upload --release=stable *.snap
         env:
-          SNAP_TOKEN: ${{secrets.SNAPCRAFT_STORE_CREDENTIALS}}
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           SNAPCRAFT_BUILD_ENVIRONMENT: host
