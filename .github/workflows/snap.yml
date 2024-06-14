@@ -17,9 +17,10 @@ jobs:
       - name: Setup Snapcraft
         run: |
           sudo snap install snapcraft --classic
+          sudo snap install multipass
           snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          SNAPCRAFT_BUILD_ENVIRONMENT: host
+          SNAPCRAFT_BUILD_ENVIRONMENT: multipass
