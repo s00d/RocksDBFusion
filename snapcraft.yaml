@@ -22,7 +22,11 @@ parts:
   rocksdb-server:
     source: .
     plugin: rust
-    source-subdir: server
+    build-packages:
+      - libclang-dev
+    override-build: |
+      export LIBCLANG_PATH=/usr/lib/llvm-10/lib
+      snapcraftctl build -- --manifest-path=server/Cargo.toml
 
 apps:
   rocksdb-server:
