@@ -30,13 +30,8 @@ issues:
 source-code: https://github.com/s00d/RocksDBFusion
 website: https://github.com/s00d/RocksDBFusion
 
-#architectures:
-#  - amd64
-#  - arm64
-#  - armhf
-#  - ppc64el
-#  - riscv64
-#  - s390x
+architectures:
+  - all
 
 parts:
   rocksdb-server:
@@ -50,7 +45,7 @@ parts:
       - gcc
       - git
     build-environment:
-      - LIBCLANG_PATH: /usr/lib/llvm-10/lib
+      - LIBCLANG_PATH: /usr/lib/llvm-14/lib
 
 apps:
   rocksdb-server:
