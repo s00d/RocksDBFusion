@@ -16,11 +16,17 @@ jobs:
 
       - name: Setup Snapcraft
         run: |
+          sudo apt-get update
+          sudo apt-get install -y snapd lxd
           sudo snap install snapcraft --classic
-          sudo snap install multipass
+          sudo lxd init --auto
+          sudo usermod -aG lxd $USER
+          newgrp lxd
+          sudo lxd waitready
+          sudo lxd init --auto
           snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          SNAPCRAFT_BUILD_ENVIRONMENT: multipass
+          SNAPCRAFT_BUILD_ENVIRONMENT: lxd
