@@ -1,5 +1,5 @@
 name: rocksdb-server
-version: '0.1.2'
+version: '0.1.3'
 summary: A server implementation for RocksDB
 description: |
   This project provides a simple server implementation for RocksDB, a persistent key-value store for fast storage environments. 
@@ -29,6 +29,13 @@ issues:
   - https://github.com/s00d/RocksDBFusion/issues
 source-code: https://github.com/s00d/RocksDBFusion
 website: https://github.com/s00d/RocksDBFusion
+
+architectures:
+  - amd64
+  - arm64
+  - armhf
+  - ppc64el
+  - s390x
 
 parts:
   rocksdb-server:

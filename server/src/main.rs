@@ -17,33 +17,27 @@ use tokio::net::TcpListener;
 #[derive(StructOpt, Debug)]
 #[structopt(name = "RocksDB Server", about = "A simple RocksDB server.")]
 struct Opt {
-    /// Path to the RocksDB database
-    #[structopt(long, short, default_value = "./db_test")]
+    #[structopt(long, short, env = "ROCKSDB_PATH", default_value = "./db_test", help = "Path to the RocksDB database")]
     dbpath: PathBuf,
 
-    /// Port to listen on
-    #[structopt(long, short, default_value = "12345")]
-    port: String,
-
-    /// Host to bind the server to
-    #[structopt(long, default_value = "127.0.0.1")]
+    #[structopt(long, env = "ROCKSDB_HOST", default_value = "127.0.0.1", help = "Bind address")]
     host: String,
 
-    /// Time-to-live (TTL) for database entries in seconds
-    #[structopt(long, short)]
+    #[structopt(long, short, env = "ROCKSDB_PORT", default_value = "12345", help = "Bind Port")]
+    port: String,
+
+    #[structopt(long, env = "ROCKSDB_TTL", short, help = "Time-to-live (TTL) for database entries in seconds")]
     ttl: Option<u64>,
 
-    /// Authentication token for server access
-    #[structopt(long)]
+    #[structopt(long, env = "ROCKSDB_TOKEN", help = "Authentication token for server access")]
     token: Option<String>,
 
-    /// Logging level (debug, info, warn, error)
-    #[structopt(long, default_value = "info")]
-    log_level: LogLevel,
-
-    /// Path to the lock file
-    #[structopt(long, parse(from_os_str))]
+    #[cfg(not(target_os = "windows"))]
+    #[structopt(long, env = "ROCKSDB_LOCK_FILE", parse(from_os_str), help = "Path to the lock file")]
     lock_file: Option<PathBuf>,
+
+    #[structopt(long, possible_values = &LogLevel::variants(), case_insensitive = true, env = "ROCKSDB_LOG_LEVEL", default_value = "info", help = "Logging level")]
+    log_level: LogLevel,
 }
 
 #[tokio::main]
@@ -68,13 +62,6 @@ async fn main() -> io::Result<()> {
     } else {
         None
     };
-
-    #[cfg(target_os = "windows")]
-    if opt.lock_file.is_some() {
-        log::warn!(
-            "File locking is not supported on Windows. The lock file option will be ignored."
-        );
-    }
 
     let log_level: LevelFilter = opt.log_level.into();
 

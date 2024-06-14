@@ -73,6 +73,32 @@ export ROCKSDB_LOCK_FILE="$(brew --prefix)/var/rocksdb/rocksdb.lock"
 brew services start rocksdb_server
 ```
 
+
+### Using Snap (Linux)
+
+RocksDB Server is available as a Snap package for easy installation on Linux systems.
+
+1. Install Snapd (if not already installed):
+   ```sh
+   sudo apt update
+   sudo apt install snapd
+   ```
+
+2. Install RocksDB Server:
+   ```sh
+   sudo snap install rocksdb-server
+   ```
+
+3. Start the server:
+   ```sh
+   rocksdb-server.rocksdb-server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
+   ```
+
+4. Enable and start as a service:
+   ```sh
+   sudo snap start rocksdb-server
+   ```
+
 ### Environment Variables
 
 - `ROCKSDB_PATH`: Path to the RocksDB database (default: `$(brew --prefix)/var/rocksdb/db`)
@@ -372,3 +398,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+

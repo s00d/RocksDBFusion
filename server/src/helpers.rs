@@ -7,7 +7,7 @@ use std::str::FromStr;
 #[cfg(not(target_os = "windows"))]
 use tokio::io;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
     Debug,
     Info,
@@ -16,7 +16,7 @@ pub enum LogLevel {
 }
 
 impl FromStr for LogLevel {
-    type Err = String;
+    type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
@@ -24,7 +24,7 @@ impl FromStr for LogLevel {
             "info" => Ok(LogLevel::Info),
             "warn" => Ok(LogLevel::Warn),
             "error" => Ok(LogLevel::Error),
-            _ => Err(format!("Invalid log level: {}", s)),
+            _ => Err("no match"),
         }
     }
 }
@@ -37,6 +37,12 @@ impl Into<LevelFilter> for LogLevel {
             LogLevel::Warn => LevelFilter::Warn,
             LogLevel::Error => LevelFilter::Error,
         }
+    }
+}
+
+impl LogLevel {
+    pub fn variants() -> [&'static str; 4] {
+        ["debug", "info", "warn", "error"]
     }
 }
 
