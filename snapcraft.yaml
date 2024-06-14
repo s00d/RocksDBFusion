@@ -30,8 +30,6 @@ issues:
 source-code: https://github.com/s00d/RocksDBFusion
 website: https://github.com/s00d/RocksDBFusion
 
-architectures: [amd64, arm64, armhf, ppc64el, s390x, i386]
-
 parts:
   rocksdb-server:
     source: .
