@@ -14,7 +14,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: canonical/setup-lxd
+      - name: setup-lxd
+        uses: canonical/setup-lxd
 
       - name: Setup Snapcraft
         run: |
