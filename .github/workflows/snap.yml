@@ -1,4 +1,4 @@
-name: Build and Publish Snap
+name: Publish to Snap
 
 on:
   workflow_dispatch:
@@ -21,12 +21,12 @@ jobs:
           sudo snap install multipass
 
       - name: Build Snap package
-        run: snapcraft
+        run: sudo snapcraft
 
       - name: Publish Snap package
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
           echo "${SNAPCRAFT_STORE_CREDENTIALS}" > snap_login_file
-          snapcraft login --with snap_login_file
-          snapcraft upload --release stable *.snap
+          sudo snapcraft login --with snap_login_file
+          sudo snapcraft upload --release stable *.snap
