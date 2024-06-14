@@ -1,3 +1,4 @@
 /target
 log*
 db_test
+.github_token
