@@ -18,15 +18,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y snapcraft
-          sudo snap install multipass
+          sudo snap install multipass --edge
 
       - name: Build Snap package
-        run: sudo snapcraft
+        run: snapcraft
 
       - name: Publish Snap package
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
           echo "${SNAPCRAFT_STORE_CREDENTIALS}" > snap_login_file
-          sudo snapcraft login --with snap_login_file
-          sudo snapcraft upload --release stable *.snap
+          snapcraft login --with snap_login_file
+          snapcraft upload --release stable *.snap
