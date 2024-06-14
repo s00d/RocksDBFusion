@@ -17,8 +17,7 @@ jobs:
       - name: Setup Snapcraft
         run: |
           sudo snap install snapcraft --classic
-          export SNAPCRAFT_STORE_CREDENTIALS="${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}"
-          snapcraft login
+          snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
         env:
