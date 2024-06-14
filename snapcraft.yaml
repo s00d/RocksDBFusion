@@ -6,27 +6,51 @@ description: |
   The server is designed to handle database operations over TCP connections, allowing clients to interact with the RocksDB instance remotely.
 
   Features:
-  - CRUD Operations: Create, Read, Update, and Delete operations on RocksDB.
-  - Batch Operations: Support for batch write operations.
-  - Transactions: Begin, commit, and rollback transactions.
-  - Column Families: Manage column families within the RocksDB instance.
-  - Backup and Restore: Create and restore backups of the database.
-  - Logging: Configurable logging levels.
-  - Authentication: Optional token-based authentication for server access.
-  - Custom Merge Operator: A JSON merge operator to handle JSON merge operations.
+  - 🔄 CRUD Operations: Create, Read, Update, and Delete operations on RocksDB.
+  - 🐧 Installable via `snap`
+  - 🛠️ Batch Operations: Support for batch write operations.
+  - 🔐 Transactions: Begin, commit, and rollback transactions.
+  - 🗂️ Column Families: Manage column families within the RocksDB instance.
+  - 💾 Backup and Restore: Create and restore backups of the database.
+  - 📊 Logging: Configurable logging levels.
+  - 🔑 Authentication: Optional token-based authentication for server access.
+  - 🧩 Custom Merge Operator: A JSON merge operator to handle JSON merge operations.
+  - 🌎 Monorepo-friendly, with hierarchical and cascading configuration
 
 base: core20
 confinement: strict
+#  The base that the builds run on - allows building for other architectures
+#build-base: core22
+# Performance difference with xz vs lzo is small in this case, but provides
+# a ~40% reduction in file size for a very frequently updating snap.
+compression: xz
+contact: https://github.com/s00d/RocksDBFusion/issues
+issues:
+  - https://github.com/s00d/RocksDBFusion/issues
+source-code: https://github.com/s00d/RocksDBFusion
+website: https://github.com/s00d/RocksDBFusion
+
+#architectures:
+#  - amd64
+#  - arm64
+#  - armhf
+#  - ppc64el
+#  - riscv64
+#  - s390x
 
 parts:
   rocksdb-server:
     source: .
     plugin: rust
+    rust-path:
+      - server
     build-packages:
       - libclang-dev
-    override-build: |
-      export LIBCLANG_PATH=/usr/lib/llvm-10/lib
-      snapcraftctl build -- --manifest-path=server/Cargo.toml
+      - curl
+      - gcc
+      - git
+    build-environment:
+      - LIBCLANG_PATH: /usr/lib/llvm-10/lib
 
 apps:
   rocksdb-server:
