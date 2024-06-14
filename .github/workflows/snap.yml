@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   build-and-publish-to-snap:
+    name: Release - ${{ matrix.platform }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -22,6 +23,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.platform }}
+
+      - name: Set version
+        id: version
+        run: |
+          VERSION=$(grep '^version =' server/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')
+          
+          FILE="snapcraft.yaml"
+          
+          echo "Updating at $FORMULA_FILE with version $VERSION"
+
+          sed -i "s|{VERSION}|${VERSION}|g" "$FORMULA_FILE"
+
       - uses: diddlesnaps/snapcraft-multiarch-action@v1
         with:
           architecture: ${{ matrix.platform }}

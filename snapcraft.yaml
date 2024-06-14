@@ -1,5 +1,5 @@
 name: rocksdb-server
-version: '0.1.2'
+version: '{VERSION}'
 summary: A server implementation for RocksDB
 description: |
   This project provides a simple server implementation for RocksDB, a persistent key-value store for fast storage environments. 
