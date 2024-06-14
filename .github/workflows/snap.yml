@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-and-publish-to-snap:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -20,6 +20,9 @@ jobs:
           sudo apt-get install -y snapd
           sudo snap install multipass --classic
           sudo snap install snapcraft --classic
+          sudo usermod -aG multipass $USER
+          newgrp multipass
+          sudo multipass set local.privileged-mounts=true
           snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
