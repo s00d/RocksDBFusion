@@ -1,33 +1,49 @@
 name: Publish to Snap
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allow manual triggers
 
 permissions:
   contents: write
 
 jobs:
-  build-and-publish-to-snap:
-    runs-on: ubuntu-22.04
-
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      snap-file: ${{ steps.build-snap.outputs.snap }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y snapcraft
-          sudo snap install multipass
-          sudo systemctl start multipass
+        uses: actions/checkout@v3
 
       - name: Build Snap package
-        run: snapcraft
+        id: build-snap
+        uses: snapcore/action-build@v1
+
+      - name: Ensure snap is installable
+        run: sudo snap install --dangerous ${{ steps.build-snap.outputs.snap }}
+
+      - name: Test Snap package
+        run: gbeuzeboc-snapped-ros2-pkg.snapped-ros2-launch --print-description
+
+      - name: Upload Snap artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: gbeuzeboc-snapped-ros2-pkg
+          path: ${{ steps.build-snap.outputs.snap }}
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Snap artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: gbeuzeboc-snapped-ros2-pkg
+          path: .
 
       - name: Publish Snap package
+        uses: snapcore/action-publish@v1
         env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        run: |
-          echo "${SNAPCRAFT_STORE_CREDENTIALS}" > snap_login_file
-          snapcraft login --with snap_login_file
-          snapcraft upload --release stable *.snap
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPSTORE_LOGIN }}
+        with:
+          snap: ${{ needs.build.outputs.snap-file }}
