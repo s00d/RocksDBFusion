@@ -17,10 +17,10 @@ description: |
   - 🧩 Custom Merge Operator: A JSON merge operator to handle JSON merge operations.
   - 🌎 Monorepo-friendly, with hierarchical and cascading configuration
 
-base: core20
+base: core22
 confinement: strict
 #  The base that the builds run on - allows building for other architectures
-#build-base: core22
+build-base: core22
 # Performance difference with xz vs lzo is small in this case, but provides
 # a ~40% reduction in file size for a very frequently updating snap.
 compression: xz
@@ -31,7 +31,12 @@ source-code: https://github.com/s00d/RocksDBFusion
 website: https://github.com/s00d/RocksDBFusion
 
 architectures:
-  - all
+  - amd64
+  - arm64
+  - armhf
+  - ppc64el
+  - riscv64
+  - s390x
 
 parts:
   rocksdb-server:
