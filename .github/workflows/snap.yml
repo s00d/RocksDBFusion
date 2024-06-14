@@ -41,9 +41,9 @@ jobs:
           
           FILE="snapcraft.yaml"
           
-          echo "Updating at $FORMULA_FILE with version $VERSION"
+          echo "Updating at $FILE with version $VERSION"
 
-          sed -i "s|{VERSION}|${VERSION}|g" "$FORMULA_FILE"
+          sed -i "s|{VERSION}|${VERSION}|g" "$FILE"
 
       - uses: diddlesnaps/snapcraft-multiarch-action@v1
         with:
