@@ -17,13 +17,9 @@ jobs:
       - name: Setup Snapcraft
         run: |
           sudo apt-get update
-          sudo apt-get install -y snapd lxd
+          sudo apt-get install -y snapd
           sudo snap install snapcraft --classic
-          sudo lxd init --auto
-          sudo usermod -aG lxd $USER
-          newgrp lxd
-          sudo lxd waitready
-          sudo lxd init --auto
+          sudo snap install snapcraft --classic
           snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
