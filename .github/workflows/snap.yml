@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: setup-lxd
+      - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
 
       - name: Setup Snapcraft
@@ -22,9 +22,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y snapd
           sudo snap install snapcraft --classic
-          snapcraft whoami
-          snapcraft
+
+      - name: Build Snap for Multiple Architectures
+        run: |
+          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=amd64
+          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=arm64
+          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=armhf
+          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=ppc64el
+          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=riscv64
+          snapcraft --use-lxd --enable-experimental-target-arch --target-arch=s390x
+
+      - name: Upload Snap
+        run: |
           snapcraft upload --release=stable *.snap
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          SNAPCRAFT_BUILD_ENVIRONMENT: lxd
