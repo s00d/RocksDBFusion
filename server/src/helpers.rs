@@ -51,10 +51,7 @@ impl LockFileGuard {
         let options = FileOptions::new().write(true).create(true).append(false);
         let lock = FileLock::lock(path.to_str().unwrap(), true, options)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-        Ok(Self {
-            path,
-            _file: lock,
-        })
+        Ok(Self { path, _file: lock })
     }
 }
 #[cfg(not(target_os = "windows"))]
@@ -68,4 +65,3 @@ impl Drop for LockFileGuard {
         }
     }
 }
-

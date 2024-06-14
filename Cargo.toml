@@ -1,5 +1,5 @@
 [workspace]
-members = ["server", "client"]
+members = ["server", "client", "tools/schema_generator"]
 exclude = ["rocksdb-viewer"]
 resolver = "2"
 

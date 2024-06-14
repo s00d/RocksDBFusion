@@ -2,9 +2,9 @@ pub mod db_manager;
 mod helpers;
 pub mod server;
 
-use crate::helpers::{LogLevel};
 #[cfg(not(target_os = "windows"))]
-use crate::helpers::{LockFileGuard};
+use crate::helpers::LockFileGuard;
+use crate::helpers::LogLevel;
 use env_logger::{Builder, Target};
 use log::{info, LevelFilter};
 use server::RocksDBServer;
@@ -71,7 +71,9 @@ async fn main() -> io::Result<()> {
 
     #[cfg(target_os = "windows")]
     if opt.lock_file.is_some() {
-        log::warn!("File locking is not supported on Windows. The lock file option will be ignored.");
+        log::warn!(
+            "File locking is not supported on Windows. The lock file option will be ignored."
+        );
     }
 
     let log_level: LevelFilter = opt.log_level.into();

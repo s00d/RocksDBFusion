@@ -156,21 +156,42 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Inserts a key-value pair into the database.
+     *
+     * This function handles the `put` action which inserts a specified key-value pair into the RocksDB database.
+     * The function can optionally operate within a specified column family and transaction if provided.
+     *
+     * # Link: put
+     *
+     * # Parameters
+     * - `key`: String - The key to put
+     * - `value`: String - The value to put
+     * - `cf_name`: Option<String> - The column family name
+     * - `txn_id`: Option<usize> - The transaction ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_put(&self, req: Request) -> Response {
         debug!("handle_put with key: {:?}, value: {:?}", req.key, req.value);
         match (req.key, req.value) {
-            (Some(key), Some(value)) => match self.db_manager.put(key, value, req.cf_name, req.txn_id) {
-                Ok(_) => Response {
-                    success: true,
-                    result: None,
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
+            (Some(key), Some(value)) => {
+                match self.db_manager.put(key, value, req.cf_name, req.txn_id) {
+                    Ok(_) => Response {
+                        success: true,
+                        result: None,
+                        error: None,
+                    },
+                    Err(e) => Response {
+                        success: false,
+                        result: None,
+                        error: Some(e),
+                    },
+                }
+            }
             _ => Response {
                 success: false,
                 result: None,
@@ -179,10 +200,32 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Retrieves the value associated with a key from the database.
+     *
+     * This function handles the `get` action which fetches the value associated with a specified key from the RocksDB database.
+     * The function can optionally operate within a specified column family and return a default value if the key is not found.
+     *
+     * # Link: get
+     *
+     * # Parameters
+     * - `key`: String - The key to get
+     * - `cf_name`: Option<String> - The column family name
+     * - `default`: Option<String> - The default value
+     * - `txn_id`: Option<usize> - The transaction ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_get(&self, req: Request) -> Response {
         debug!("handle_get with key: {:?}", req.key);
         match req.key {
-            Some(key) => match self.db_manager.get(key, req.cf_name, req.default, req.txn_id) {
+            Some(key) => match self
+                .db_manager
+                .get(key, req.cf_name, req.default, req.txn_id)
+            {
                 Ok(Some(value)) => Response {
                     success: true,
                     result: Some(value),
@@ -207,6 +250,24 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Deletes a key-value pair from the database.
+     *
+     * This function handles the `delete` action which removes a specified key-value pair from the RocksDB database.
+     * The function can optionally operate within a specified column family and transaction if provided.
+     *
+     * # Link: delete
+     *
+     * # Parameters
+     * - `key`: String - The key to delete
+     * - `cf_name`: Option<String> - The column family name
+     * - `txn_id`: Option<usize> - The transaction ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_delete(&self, req: Request) -> Response {
         debug!("handle_delete with key: {:?}", req.key);
         match req.key {
@@ -230,24 +291,45 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Merges a value with an existing key in the database.
+     *
+     * This function handles the `merge` action which merges a specified value with an existing key in the RocksDB database.
+     * The function can optionally operate within a specified column family and transaction if provided.
+     *
+     * # Link: merge
+     *
+     * # Parameters
+     * - `key`: String - The key to merge
+     * - `value`: String - The value to merge
+     * - `cf_name`: Option<String> - The column family name
+     * - `txn_id`: Option<usize> - The transaction ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_merge(&self, req: Request) -> Response {
         debug!(
             "handle_merge with key: {:?}, value: {:?}",
             req.key, req.value
         );
         match (req.key, req.value) {
-            (Some(key), Some(value)) => match self.db_manager.merge(key, value, req.cf_name, req.txn_id) {
-                Ok(_) => Response {
-                    success: true,
-                    result: None,
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
+            (Some(key), Some(value)) => {
+                match self.db_manager.merge(key, value, req.cf_name, req.txn_id) {
+                    Ok(_) => Response {
+                        success: true,
+                        result: None,
+                        error: None,
+                    },
+                    Err(e) => Response {
+                        success: false,
+                        result: None,
+                        error: Some(e),
+                    },
+                }
+            }
             _ => Response {
                 success: false,
                 result: None,
@@ -256,6 +338,23 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Retrieves a property of the database.
+     *
+     * This function handles the `get_property` action which fetches a specified property of the RocksDB database.
+     * The function can optionally operate within a specified column family if provided.
+     *
+     * # Link: get_property
+     *
+     * # Parameters
+     * - `value`: String - The property to get
+     * - `cf_name`: Option<String> - The column family name
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_get_property(&self, req: Request) -> Response {
         debug!("handle_get_property with property: {:?}", req.value);
         match req.value {
@@ -274,11 +373,29 @@ impl RocksDBServer {
             _ => Response {
                 success: false,
                 result: None,
-                error: Some("Missing key or value".to_string()),
+                error: Some("Missing property".to_string()),
             },
         }
     }
 
+    /**
+     * Retrieves a range of keys from the database.
+     *
+     * This function handles the `keys` action which retrieves a range of keys from the RocksDB database.
+     * The function can specify a starting index, limit on the number of keys, and a query string to filter keys.
+     *
+     * # Link: keys
+     *
+     * # Parameters
+     * - `options.start`: usize - The start index
+     * - `options.limit`: usize - The limit of keys to retrieve
+     * - `options.query`: Option<String> - The query string to filter keys
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_get_keys(&self, req: Request) -> Response {
         debug!("handle_get_keys with options: {:?}", req.options);
         let start = req.parse_option::<usize>("start").unwrap_or(0);
@@ -305,8 +422,24 @@ impl RocksDBServer {
             })
     }
 
+    /**
+     * Retrieves all keys from the database.
+     *
+     * This function handles the `all` action which retrieves all keys from the RocksDB database.
+     * The function can specify a query string to filter keys.
+     *
+     * # Link: all
+     *
+     * # Parameters
+     * - `options.query`: Option<String> - The query string to filter keys
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_get_all(&self, req: Request) -> Response {
-        debug!("handle_get_keys with options: {:?}", req.options);
+        debug!("handle_get_all with options: {:?}", req.options);
         let query = req
             .options
             .as_ref()
@@ -329,6 +462,22 @@ impl RocksDBServer {
             })
     }
 
+    /**
+     * Lists all column families in the database.
+     *
+     * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
+     * The function requires the path to the database.
+     *
+     * # Link: list_column_families
+     *
+     * # Parameters
+     * - `path`: String - The path to the database
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_list_column_families(&self, req: Request) -> Response {
         debug!("handle_list_column_families with value: {:?}", req.value);
         match req.value {
@@ -352,6 +501,22 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Creates a new column family in the database.
+     *
+     * This function handles the `create_column_family` action which creates a new column family in the RocksDB database.
+     * The function requires the name of the column family to create.
+     *
+     * # Link: create_column_family
+     *
+     * # Parameters
+     * - `cf_name`: String - The column family name to create
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_create_column_family(&self, req: Request) -> Response {
         debug!(
             "handle_create_column_family with cf_name: {:?}",
@@ -378,6 +543,22 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Drops an existing column family from the database.
+     *
+     * This function handles the `drop_column_family` action which drops an existing column family from the RocksDB database.
+     * The function requires the name of the column family to drop.
+     *
+     * # Link: drop_column_family
+     *
+     * # Parameters
+     * - `cf_name`: String - The column family name to drop
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_drop_column_family(&self, req: Request) -> Response {
         debug!("handle_drop_column_family with cf_name: {:?}", req.cf_name);
         match req.cf_name {
@@ -401,6 +582,24 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Compacts a range of keys in the database.
+     *
+     * This function handles the `compact_range` action which compacts a specified range of keys in the RocksDB database.
+     * The function can optionally specify the start key, end key, and column family.
+     *
+     * # Link: compact_range
+     *
+     * # Parameters
+     * - `options.start`: Option<String> - The start key
+     * - `options.end`: Option<String> - The end key
+     * - `cf_name`: Option<String> - The column family name
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_compact_range(&self, req: Request) -> Response {
         debug!("handle_compact_range with options: {:?}", req.options);
         let start = req
@@ -424,6 +623,24 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Adds a key-value pair to the current write batch.
+     *
+     * This function handles the `write_batch_put` action which adds a specified key-value pair to the current write batch.
+     * The function can optionally operate within a specified column family.
+     *
+     * # Link: write_batch_put
+     *
+     * # Parameters
+     * - `key`: String - The key to put
+     * - `value`: String - The value to put
+     * - `cf_name`: Option<String> - The column family name
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_write_batch_put(&self, req: Request) -> Response {
         debug!(
             "handle_write_batch_put with key: {:?}, value: {:?}",
@@ -452,6 +669,24 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Merges a value with an existing key in the current write batch.
+     *
+     * This function handles the `write_batch_merge` action which merges a specified value with an existing key in the current write batch.
+     * The function can optionally operate within a specified column family.
+     *
+     * # Link: write_batch_merge
+     *
+     * # Parameters
+     * - `key`: String - The key to merge
+     * - `value`: String - The value to merge
+     * - `cf_name`: Option<String> - The column family name
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_write_batch_merge(&self, req: Request) -> Response {
         debug!(
             "handle_write_batch_merge with key: {:?}, value: {:?}",
@@ -480,6 +715,23 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Deletes a key from the current write batch.
+     *
+     * This function handles the `write_batch_delete` action which deletes a specified key from the current write batch.
+     * The function can optionally operate within a specified column family.
+     *
+     * # Link: write_batch_delete
+     *
+     * # Parameters
+     * - `key`: String - The key to delete
+     * - `cf_name`: Option<String> - The column family name
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_write_batch_delete(&self, req: Request) -> Response {
         debug!("handle_write_batch_delete with key: {:?}", req.key);
         match req.key {
@@ -503,6 +755,21 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Writes the current write batch to the database.
+     *
+     * This function handles the `write_batch_write` action which writes the current write batch to the RocksDB database.
+     *
+     * # Link: write_batch_write
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_write_batch_write(&self) -> Response {
         debug!("handle_write_batch_write");
         match self.db_manager.write_batch_write() {
@@ -519,6 +786,21 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Clears the current write batch.
+     *
+     * This function handles the `write_batch_clear` action which clears the current write batch.
+     *
+     * # Link: write_batch_clear
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_write_batch_clear(&self) -> Response {
         debug!("handle_write_batch_clear");
         match self.db_manager.write_batch_clear() {
@@ -535,6 +817,21 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Destroys the current write batch.
+     *
+     * This function handles the `write_batch_destroy` action which destroys the current write batch.
+     *
+     * # Link: write_batch_destroy
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_write_batch_destroy(&self) -> Response {
         debug!("handle_write_batch_destroy");
         match self.db_manager.write_batch_destroy() {
@@ -551,6 +848,21 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Creates a new iterator for the database.
+     *
+     * This function handles the `create_iterator` action which creates a new iterator for iterating over the keys in the RocksDB database.
+     *
+     * # Link: create_iterator
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_create_iterator(&self) -> Response {
         debug!("handle_create_iterator");
         Response {
@@ -560,6 +872,22 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Destroys an existing iterator.
+     *
+     * This function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.
+     * The function requires the ID of the iterator to destroy.
+     *
+     * # Link: destroy_iterator
+     *
+     * # Parameters
+     * - `options.iterator_id`: usize - The iterator ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_destroy_iterator(&self, req: Request) -> Response {
         debug!(
             "handle_destroy_iterator with iterator_id: {:?}",
@@ -580,6 +908,24 @@ impl RocksDBServer {
             })
     }
 
+    /**
+     * Seeks to a specific key in the iterator.
+     *
+     * This function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.
+     * The function requires the ID of the iterator, the key to seek, and the direction of the seek (Forward or Reverse).
+     *
+     * # Link: iterator_seek
+     *
+     * # Parameters
+     * - `options.iterator_id`: usize - The iterator ID
+     * - `key`: String - The key to seek
+     * - `direction`: String - The direction of the seek (Forward or Reverse)
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_iterator_seek(
         &self,
         req: Request,
@@ -613,6 +959,22 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Advances the iterator to the next key.
+     *
+     * This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
+     * The function requires the ID of the iterator.
+     *
+     * # Link: iterator_next
+     *
+     * # Parameters
+     * - `options.iterator_id`: usize - The iterator ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_iterator_next(&self, req: Request) -> Response {
         debug!(
             "handle_iterator_next with iterator_id: {:?}",
@@ -633,6 +995,22 @@ impl RocksDBServer {
             })
     }
 
+    /**
+     * Moves the iterator to the previous key.
+     *
+     * This function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.
+     * The function requires the ID of the iterator.
+     *
+     * # Link: iterator_prev
+     *
+     * # Parameters
+     * - `options.iterator_id`: usize - The iterator ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_iterator_prev(&self, req: Request) -> Response {
         debug!(
             "handle_iterator_prev with iterator_id: {:?}",
@@ -653,6 +1031,21 @@ impl RocksDBServer {
             })
     }
 
+    /**
+     * Creates a backup of the database.
+     *
+     * This function handles the `backup` action which creates a backup of the RocksDB database.
+     *
+     * # Link: backup
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_backup(&self) -> Response {
         debug!("handle_backup");
         match self.db_manager.backup() {
@@ -669,6 +1062,21 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Restores the database from the latest backup.
+     *
+     * This function handles the `restore_latest` action which restores the RocksDB database from the latest backup.
+     *
+     * # Link: restore_latest
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_restore_latest(&self) -> Response {
         debug!("handle_restore_latest");
         match self.db_manager.restore_latest_backup() {
@@ -685,6 +1093,22 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Restores the database from a specified backup.
+     *
+     * This function handles the `restore` action which restores the RocksDB database from a specified backup.
+     * The function requires the ID of the backup to restore.
+     *
+     * # Link: restore
+     *
+     * # Parameters
+     * - `options.backup_id`: u32 - The ID of the backup to restore
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_restore_request(&self, req: Request) -> Response {
         debug!(
             "handle_restore_request with backup_id: {:?}",
@@ -705,6 +1129,21 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Retrieves information about all backups.
+     *
+     * This function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.
+     *
+     * # Link: get_backup_info
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_get_backup_info(&self) -> Response {
         debug!("handle_get_backup_info");
         match self.db_manager.get_backup_info() {
@@ -724,6 +1163,21 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Begins a new transaction.
+     *
+     * This function handles the `begin_transaction` action which begins a new transaction in the RocksDB database.
+     *
+     * # Link: begin_transaction
+     *
+     * # Parameters
+     * - None
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_begin_transaction(&self) -> Response {
         debug!("handle_begin_transaction");
         match self.db_manager.begin_transaction() {
@@ -743,6 +1197,22 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Commits an existing transaction.
+     *
+     * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
+     * The function requires the ID of the transaction to commit.
+     *
+     * # Link: commit_transaction
+     *
+     * # Parameters
+     * - `txn_id`: usize - The transaction ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_commit_transaction(&self, req: Request) -> Response {
         debug!("handle_commit_transaction, txn_id: {:?}", req.txn_id);
 
@@ -770,6 +1240,22 @@ impl RocksDBServer {
         }
     }
 
+    /**
+     * Rolls back an existing transaction.
+     *
+     * This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
+     * The function requires the ID of the transaction to roll back.
+     *
+     * # Link: rollback_transaction
+     *
+     * # Parameters
+     * - `txn_id`: usize - The transaction ID
+     *
+     * # Returns
+     * - `success`: bool - Whether the operation was successful
+     * - `result`: Option<String> - The result of the operation
+     * - `error`: Option<String> - Any error that occurred
+     */
     async fn handle_rollback_transaction(&self, req: Request) -> Response {
         debug!("handle_rollback_transaction, txn_id: {:?}", req.txn_id);
 

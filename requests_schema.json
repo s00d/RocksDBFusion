@@ -1,0 +1,931 @@
+{
+  "requests": [
+    {
+      "action": "put",
+      "description": "Inserts a key-value pair into the database.\\nThis function handles the `put` action which inserts a specified key-value pair into the RocksDB database.\\nThe function can optionally operate within a specified column family and transaction if provided.",
+      "parameters": {
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to put"
+        },
+        "value": {
+          "param_type": "String",
+          "required": true,
+          "description": "The value to put"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        },
+        "txn_id": {
+          "param_type": "usize",
+          "required": false,
+          "description": "The transaction ID"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "get",
+      "description": "Retrieves the value associated with a key from the database.\\nThis function handles the `get` action which fetches the value associated with a specified key from the RocksDB database.\\nThe function can optionally operate within a specified column family and return a default value if the key is not found.",
+      "parameters": {
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to get"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        },
+        "default": {
+          "param_type": "String",
+          "required": false,
+          "description": "The default value"
+        },
+        "txn_id": {
+          "param_type": "usize",
+          "required": false,
+          "description": "The transaction ID"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "delete",
+      "description": "Deletes a key-value pair from the database.\\nThis function handles the `delete` action which removes a specified key-value pair from the RocksDB database.\\nThe function can optionally operate within a specified column family and transaction if provided.",
+      "parameters": {
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to delete"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        },
+        "txn_id": {
+          "param_type": "usize",
+          "required": false,
+          "description": "The transaction ID"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "merge",
+      "description": "Merges a value with an existing key in the database.\\nThis function handles the `merge` action which merges a specified value with an existing key in the RocksDB database.\\nThe function can optionally operate within a specified column family and transaction if provided.",
+      "parameters": {
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to merge"
+        },
+        "value": {
+          "param_type": "String",
+          "required": true,
+          "description": "The value to merge"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        },
+        "txn_id": {
+          "param_type": "usize",
+          "required": false,
+          "description": "The transaction ID"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "get_property",
+      "description": "Retrieves a property of the database.\\nThis function handles the `get_property` action which fetches a specified property of the RocksDB database.\\nThe function can optionally operate within a specified column family if provided.",
+      "parameters": {
+        "value": {
+          "param_type": "String",
+          "required": true,
+          "description": "The property to get"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "keys",
+      "description": "Retrieves a range of keys from the database.\\nThis function handles the `keys` action which retrieves a range of keys from the RocksDB database.\\nThe function can specify a starting index, limit on the number of keys, and a query string to filter keys.",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "start": {
+              "param_type": "usize",
+              "required": true,
+              "description": "The start index"
+            },
+            "limit": {
+              "param_type": "usize",
+              "required": true,
+              "description": "The limit of keys to retrieve"
+            },
+            "query": {
+              "param_type": "String",
+              "required": false,
+              "description": "The query string to filter keys"
+            }
+          }
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "all",
+      "description": "Retrieves all keys from the database.\\nThis function handles the `all` action which retrieves all keys from the RocksDB database.\\nThe function can specify a query string to filter keys.",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "query": {
+              "param_type": "String",
+              "required": false,
+              "description": "The query string to filter keys"
+            }
+          }
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "list_column_families",
+      "description": "Lists all column families in the database.\\nThis function handles the `list_column_families` action which lists all column families in the RocksDB database.\\nThe function requires the path to the database.",
+      "parameters": {
+        "path": {
+          "param_type": "String",
+          "required": true,
+          "description": "The path to the database"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "create_column_family",
+      "description": "Creates a new column family in the database.\\nThis function handles the `create_column_family` action which creates a new column family in the RocksDB database.\\nThe function requires the name of the column family to create.",
+      "parameters": {
+        "cf_name": {
+          "param_type": "String",
+          "required": true,
+          "description": "The column family name to create"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "drop_column_family",
+      "description": "Drops an existing column family from the database.\\nThis function handles the `drop_column_family` action which drops an existing column family from the RocksDB database.\\nThe function requires the name of the column family to drop.",
+      "parameters": {
+        "cf_name": {
+          "param_type": "String",
+          "required": true,
+          "description": "The column family name to drop"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "compact_range",
+      "description": "Compacts a range of keys in the database.\\nThis function handles the `compact_range` action which compacts a specified range of keys in the RocksDB database.\\nThe function can optionally specify the start key, end key, and column family.",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "start": {
+              "param_type": "String",
+              "required": false,
+              "description": "The start key"
+            },
+            "end": {
+              "param_type": "String",
+              "required": false,
+              "description": "The end key"
+            }
+          }
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "write_batch_put",
+      "description": "Adds a key-value pair to the current write batch.\\nThis function handles the `write_batch_put` action which adds a specified key-value pair to the current write batch.\\nThe function can optionally operate within a specified column family.",
+      "parameters": {
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to put"
+        },
+        "value": {
+          "param_type": "String",
+          "required": true,
+          "description": "The value to put"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "write_batch_merge",
+      "description": "Merges a value with an existing key in the current write batch.\\nThis function handles the `write_batch_merge` action which merges a specified value with an existing key in the current write batch.\\nThe function can optionally operate within a specified column family.",
+      "parameters": {
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to merge"
+        },
+        "value": {
+          "param_type": "String",
+          "required": true,
+          "description": "The value to merge"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "write_batch_delete",
+      "description": "Deletes a key from the current write batch.\\nThis function handles the `write_batch_delete` action which deletes a specified key from the current write batch.\\nThe function can optionally operate within a specified column family.",
+      "parameters": {
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to delete"
+        },
+        "cf_name": {
+          "param_type": "String",
+          "required": false,
+          "description": "The column family name"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "write_batch_write",
+      "description": "Writes the current write batch to the database.\\nThis function handles the `write_batch_write` action which writes the current write batch to the RocksDB database.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "write_batch_clear",
+      "description": "Clears the current write batch.\\nThis function handles the `write_batch_clear` action which clears the current write batch.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "write_batch_destroy",
+      "description": "Destroys the current write batch.\\nThis function handles the `write_batch_destroy` action which destroys the current write batch.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "create_iterator",
+      "description": "Creates a new iterator for the database.\\nThis function handles the `create_iterator` action which creates a new iterator for iterating over the keys in the RocksDB database.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "destroy_iterator",
+      "description": "Destroys an existing iterator.\\nThis function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.\\nThe function requires the ID of the iterator to destroy.",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "iterator_id": {
+              "param_type": "usize",
+              "required": true,
+              "description": "The iterator ID"
+            }
+          }
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "iterator_seek",
+      "description": "Seeks to a specific key in the iterator.\\nThis function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.\\nThe function requires the ID of the iterator, the key to seek, and the direction of the seek (Forward or Reverse).",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "iterator_id": {
+              "param_type": "usize",
+              "required": true,
+              "description": "The iterator ID"
+            }
+          }
+        },
+        "key": {
+          "param_type": "String",
+          "required": true,
+          "description": "The key to seek"
+        },
+        "direction": {
+          "param_type": "String",
+          "required": true,
+          "description": "The direction of the seek (Forward or Reverse)"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "iterator_next",
+      "description": "Advances the iterator to the next key.\\nThis function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.\\nThe function requires the ID of the iterator.",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "iterator_id": {
+              "param_type": "usize",
+              "required": true,
+              "description": "The iterator ID"
+            }
+          }
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "iterator_prev",
+      "description": "Moves the iterator to the previous key.\\nThis function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.\\nThe function requires the ID of the iterator.",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "iterator_id": {
+              "param_type": "usize",
+              "required": true,
+              "description": "The iterator ID"
+            }
+          }
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "backup",
+      "description": "Creates a backup of the database.\\nThis function handles the `backup` action which creates a backup of the RocksDB database.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "restore_latest",
+      "description": "Restores the database from the latest backup.\\nThis function handles the `restore_latest` action which restores the RocksDB database from the latest backup.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "restore",
+      "description": "Restores the database from a specified backup.\\nThis function handles the `restore` action which restores the RocksDB database from a specified backup.\\nThe function requires the ID of the backup to restore.",
+      "parameters": {
+        "options": {
+          "param_type": "object",
+          "required": false,
+          "properties": {
+            "backup_id": {
+              "param_type": "u32",
+              "required": true,
+              "description": "The ID of the backup to restore"
+            }
+          }
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "get_backup_info",
+      "description": "Retrieves information about all backups.\\nThis function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "begin_transaction",
+      "description": "Begins a new transaction.\\nThis function handles the `begin_transaction` action which begins a new transaction in the RocksDB database.",
+      "parameters": {},
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "commit_transaction",
+      "description": "Commits an existing transaction.\\nThis function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.\\nThe function requires the ID of the transaction to commit.",
+      "parameters": {
+        "txn_id": {
+          "param_type": "usize",
+          "required": true,
+          "description": "The transaction ID"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    },
+    {
+      "action": "rollback_transaction",
+      "description": "Rolls back an existing transaction.\\nThis function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.\\nThe function requires the ID of the transaction to roll back.",
+      "parameters": {
+        "txn_id": {
+          "param_type": "usize",
+          "required": true,
+          "description": "The transaction ID"
+        }
+      },
+      "response": {
+        "success": {
+          "param_type": "bool",
+          "required": true,
+          "description": "Whether the operation was successful"
+        },
+        "result": {
+          "param_type": "String",
+          "required": false,
+          "description": "The result of the operation"
+        },
+        "error": {
+          "param_type": "String",
+          "required": false,
+          "description": "Any error that occurred"
+        }
+      }
+    }
+  ]
+}
