@@ -11,14 +11,14 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         platform:
-          - i386
           - amd64
           - armhf
           - arm64
           - ppc64el
-          - s390x
+          - riscv64
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3

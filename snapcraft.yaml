@@ -36,7 +36,6 @@ architectures:
   - armhf
   - ppc64el
   - riscv64
-  - s390x
 
 parts:
   rocksdb-server:
