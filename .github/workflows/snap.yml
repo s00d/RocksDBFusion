@@ -25,4 +25,4 @@ jobs:
           snapcraft upload --release=stable *.snap
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          SNAPCRAFT_BUILD_ENVIRONMENT: lxd
+          SNAPCRAFT_BUILD_ENVIRONMENT: multipass
