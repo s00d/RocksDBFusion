@@ -1,6 +1,3 @@
-Вот обновленный README.md с информацией о том, как запустить сервер как службу на Linux:
-
-```markdown
 # RocksDB Server
 
 ## Overview
