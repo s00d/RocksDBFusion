@@ -8,25 +8,22 @@ permissions:
 
 jobs:
   build-and-publish-to-snap:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latext
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - uses: canonical/setup-lxd
+
       - name: Setup Snapcraft
         run: |
           sudo apt-get update
           sudo apt-get install -y snapd
-          sudo snap install multipass --classic
           sudo snap install snapcraft --classic
-          sudo multipass set local.privileged-mounts=true
-          sudo systemctl restart snapd
-          sudo systemctl restart multipass
-          sudo multipass launch --name snapcraft-vm
           snapcraft whoami
           snapcraft
           snapcraft upload --release=stable *.snap
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          SNAPCRAFT_BUILD_ENVIRONMENT: multipass
+          SNAPCRAFT_BUILD_ENVIRONMENT: lxd
