@@ -1,0 +1,31 @@
+name: Build and Publish Snap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y snapcraft
+
+      - name: Build Snap package
+        run: snapcraft
+
+      - name: Publish Snap package
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          echo "${SNAPCRAFT_STORE_CREDENTIALS}" > snap_login_file
+          snapcraft login --with snap_login_file
+          snapcraft upload --release stable *.snap

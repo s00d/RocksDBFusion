@@ -1,11 +1,7 @@
 name: Update Homebrew Formula
 
 on:
-  push:
-    branches:
-      - main
-  release:
-    types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -43,18 +39,18 @@ jobs:
           MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz"
           LINUX_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz"
           LINUX_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz"
-          
+
           MACOS_X86_64_SHA256=$(curl -L $MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
           MACOS_AARCH64_SHA256=$(curl -L $MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
           LINUX_X86_64_SHA256=$(curl -L $LINUX_X86_64_URL | shasum -a 256 | awk '{print $1}')
           LINUX_AARCH64_SHA256=$(curl -L $LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
-          
+
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256" >> $GITHUB_ENV
           echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256" >> $GITHUB_ENV
           echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256" >> $GITHUB_ENV
           echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256" >> $GITHUB_ENV
-          
+
           # Отладочный вывод
           echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256"
           echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256"
@@ -72,13 +68,13 @@ jobs:
           LINUX_AARCH64_SHA256=${{ env.LINUX_AARCH64_SHA256 }}
 
           echo "Updating formula at $FORMULA_FILE with version $VERSION"
-          
+
           sed -i "s|{VERSION}|${VERSION}|g" "$FORMULA_FILE"
           sed -i "s|{MACOS_X86_64_SHA256}|${MACOS_X86_64_SHA256}|g" "$FORMULA_FILE"
           sed -i "s|{MACOS_AARCH64_SHA256}|${MACOS_AARCH64_SHA256}|g" "$FORMULA_FILE"
           sed -i "s|{LINUX_X86_64_SHA256}|${LINUX_X86_64_SHA256}|g" "$FORMULA_FILE"
           sed -i "s|{LINUX_AARCH64_SHA256}|${LINUX_AARCH64_SHA256}|g" "$FORMULA_FILE"
-          
+
           git -C homebrew-tap config user.name "github-actions"
           git -C homebrew-tap config user.email "github-actions@github.com"
           git -C homebrew-tap add Formula/rocksdb_server.rb
