@@ -57,7 +57,7 @@
           "required": false,
           "description": "The column family name"
         },
-        "default": {
+        "default_value": {
           "param_type": "String",
           "required": false,
           "description": "The default value"

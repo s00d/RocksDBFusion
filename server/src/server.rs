@@ -10,7 +10,7 @@ pub struct Request {
     pub action: String,
     pub key: Option<String>,
     pub value: Option<String>,
-    pub default: Option<String>,
+    pub default_value: Option<String>,
     pub cf_name: Option<String>,
     pub options: Option<HashMap<String, String>>,
     pub token: Option<String>,
@@ -211,7 +211,7 @@ impl RocksDBServer {
      * # Parameters
      * - `key`: String - The key to get
      * - `cf_name`: Option<String> - The column family name
-     * - `default`: Option<String> - The default value
+     * - `default_value`: Option<String> - The default value
      * - `txn_id`: Option<usize> - The transaction ID
      *
      * # Returns
@@ -224,7 +224,7 @@ impl RocksDBServer {
         match req.key {
             Some(key) => match self
                 .db_manager
-                .get(key, req.cf_name, req.default, req.txn_id)
+                .get(key, req.cf_name, req.default_value, req.txn_id)
             {
                 Ok(Some(value)) => Response {
                     success: true,
