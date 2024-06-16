@@ -9,7 +9,7 @@ category:
    - SERVER
 ---
 
-# Examples
+# Methods
 
 ## Putting a Key-Value Pair
 
