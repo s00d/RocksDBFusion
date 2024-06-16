@@ -2,6 +2,8 @@
 name = "rocksdb-client-rust"
 version = "0.1.0"
 edition = "2021"
+description = "A Rust client for interacting with RocksDB server"
+license = "MIT"
 
 exclude = [
     "/node_modules",
