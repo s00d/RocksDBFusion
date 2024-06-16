@@ -3,3 +3,4 @@ log*
 db_test
 .github_token
 snap_login_file
+node_modules

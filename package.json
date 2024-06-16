@@ -1,15 +1,7 @@
 {
-  "name": "rocksdb-client-php",
+  "name": "rocksdb",
   "version": "1.0.0",
   "description": "",
-  "main": "generator.js",
-  "directories": {
-    "test": "tests"
-  },
-  "scripts": {
-    "generator": "node generator.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "author": "",
   "license": "ISC",
   "devDependencies": {
