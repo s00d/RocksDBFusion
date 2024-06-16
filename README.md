@@ -2,24 +2,8 @@
 
 RocksDBFusion is a comprehensive project that includes a server for RocksDB, multiple clients for different languages, and a client with an interface for interacting with the server. This project aims to provide a unified and efficient way to manage and interact with RocksDB across different platforms and languages.
 
-## Project Structure
+- [Docs](https://s00d.github.io/RocksDBFusion/)
 
-The project is organized into several workspaces, each serving a distinct purpose:
-
-- [**client-php**](https://packagist.org/packages/s00d/rocksdb-client-php): A client for PHP. This client is published to Composer.
-- [**rocksdb-viewer**](rocksdb-viewer): A client with a graphical interface for interacting with the server. This is built and released with the prefix `Viewer`.
-- [**server**](server): The main server for RocksDB. This is built and released for multiple operating systems with the prefix `server`.
-
-## Getting Started
-
-### Prerequisites
-
-To build and run the projects, ensure you have the following tools installed:
-
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Node.js](https://nodejs.org/) (for the UI)
-- [PHP](https://www.php.net/downloads.php) (for the PHP client)
-- [Composer](https://getcomposer.org/) (for the PHP client dependencies)
 
 ## Contributing
 

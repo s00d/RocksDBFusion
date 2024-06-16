@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rocksdb-viewer/src-tauri/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tools/schema_generator/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/client-php/vendor/composer" />
       <excludeFolder url="file://$MODULE_DIR$/client-php/vendor/doctrine/instantiator" />
       <excludeFolder url="file://$MODULE_DIR$/client-php/vendor/myclabs/deep-copy" />

@@ -1,0 +1,9 @@
+.plyr--video {
+  --plyr-audio-controls-background: var(--vp-bg);
+  --plyr-audio-control-color: var(--vp-c);
+  --plyr-color-main: var(--vp-tc);
+
+  @media print {
+    display: none;
+  }
+}
