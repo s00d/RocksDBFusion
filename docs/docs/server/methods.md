@@ -1,3 +1,15 @@
+---
+lang: en-US
+title: Install
+sticky: 10
+icon: circle-question
+star: true
+dir:
+order: 3
+category:
+   - SERVER
+---
+
 # Examples
 
 ## Putting a Key-Value Pair

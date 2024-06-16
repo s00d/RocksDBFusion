@@ -1,3 +1,16 @@
+---
+lang: en-US
+title: Install
+sticky: 10
+icon: circle-question
+star: true
+dir:
+order: 4
+category:
+   - SERVER
+---
+
+
 # Code Structure
 
 ## `main.rs`
