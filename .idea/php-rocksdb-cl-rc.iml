@@ -5,8 +5,8 @@
       <sourceFolder url="file://$MODULE_DIR$/client-php/src" isTestSource="false" packagePrefix="s00d\RocksDB\" />
       <sourceFolder url="file://$MODULE_DIR$/client-php/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/client-php/tests" isTestSource="true" packagePrefix="s00d\RRocksDB\Tests\" />
-      <sourceFolder url="file://$MODULE_DIR$/client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rocksdb-viewer/src-tauri/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rocksdb-client-rust/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tools/schema_generator/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/client-php/vendor/composer" />

@@ -17,7 +17,7 @@ features:
   - title: Multi-Language Support
     details: Includes clients for various languages like PHP, ensuring wide usability.
   - title: User Interface
-    details: Offers a graphical interface client for easy interaction with the server.
+    details: Offers a graphical interface rocksdb-client-rust for easy interaction with the server.
   - title: Cross-Platform
     details: The server is built and released for multiple operating systems, making it versatile.
   - title: Community Contributions

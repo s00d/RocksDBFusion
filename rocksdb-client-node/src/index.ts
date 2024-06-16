@@ -369,18 +369,18 @@ class RocksDBClient {
      * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
      * The function requires the path to the database.
      *
-     * @param {string} path The path to the database
+     * @param {string} value The path to the database
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async listColumnFamilies(path: string ) {
+    async listColumnFamilies(value: string ) {
       const request: any = {
           action: 'list_column_families',
           options: {},
       };
 
-      request['path'] = path;
+      request['value'] = value;
 
 
       const response = await this.sendRequest(request);
@@ -673,12 +673,11 @@ class RocksDBClient {
      *
      * @param {number} iterator_id The iterator ID
      * @param {string} key The key to seek
-     * @param {string} direction The direction of the seek (Forward or Reverse)
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async iteratorSeek(iterator_id: number , key: string , direction: string ) {
+    async iteratorSeek(iterator_id: number , key: string ) {
       const request: any = {
           action: 'iterator_seek',
           options: {},
@@ -686,7 +685,6 @@ class RocksDBClient {
 
       request.options['iterator_id'] = iterator_id;
       request['key'] = key;
-      request['direction'] = direction;
 
 
       const response = await this.sendRequest(request);

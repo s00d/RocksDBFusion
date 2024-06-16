@@ -11,7 +11,7 @@ declare class RocksDBClient {
     timeout: number;
     retryInterval: number;
     /**
-     * Constructor to initialize the RocksDB client.
+     * Constructor to initialize the RocksDB rocksdb-client-rust.
      *
      * @param {string} host The host of the RocksDB server.
      * @param {number} port The port of the RocksDB server.

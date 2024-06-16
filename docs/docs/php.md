@@ -11,7 +11,7 @@ This package is a part of the [RocksDBFusion](https://github.com/s00d/RocksDBFus
 You can install the package via Composer:
 
 ```bash
-composer require s00d/rocksdb-client-php
+composer require s00d/rocksdb-rocksdb-client-rust-php
 ```
 
 ## Workflow

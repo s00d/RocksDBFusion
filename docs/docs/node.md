@@ -11,7 +11,7 @@ This package is a part of the [RocksDBFusion](https://github.com/s00d/RocksDBFus
 You can install the package via npm:
 
 ```bash
-npm install rocksdb-client-node
+npm install rocksdb-rocksdb-client-rust-node
 ```
 
 ## Workflow
@@ -42,12 +42,12 @@ If you want to use the client directly, you can instantiate the `RocksDBClient` 
 1. **Create an instance**:
 
    ```javascript
-   const RocksDBClient = require('rocksdb-client-node');
+   const RocksDBClient = require('rocksdb-rocksdb-client-rust-node');
    
    const client = new RocksDBClient('127.0.0.1', 12345);
 
    // If you have a token
-   // const client = new RocksDBClient('127.0.0.1', 12345, 'your-token');
+   // const rocksdb-client-rust = new RocksDBClient('127.0.0.1', 12345, 'your-token');
    ```
 
 2. **Usage**:

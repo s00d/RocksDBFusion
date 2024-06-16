@@ -471,7 +471,7 @@ impl RocksDBServer {
      * # Link: list_column_families
      *
      * # Parameters
-     * - `path`: String - The path to the database
+     * - `value`: String - The path to the database
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -919,7 +919,6 @@ impl RocksDBServer {
      * # Parameters
      * - `options.iterator_id`: usize - The iterator ID
      * - `key`: String - The key to seek
-     * - `direction`: String - The direction of the seek (Forward or Reverse)
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
