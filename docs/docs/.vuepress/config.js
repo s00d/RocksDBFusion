@@ -9,6 +9,7 @@ export default defineUserConfig({
   title: 'RocksDBFusion',
   description: 'MRocksDBFusion cis',
 
+  base: process.env.NODE_ENV === 'production' ? '/RocksDBFusion/' : '/',
 
 
   theme: hopeTheme({
