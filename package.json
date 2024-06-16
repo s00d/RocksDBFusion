@@ -2,10 +2,20 @@
   "name": "rocksdb",
   "version": "1.0.0",
   "description": "",
+  "scripts": {
+    "schema": "node generate_schema.js",
+    "client:node": "node rocksdb-client-node/generator.js",
+    "client:python": "node rocksdb-client-python/generator.js",
+    "client:rust": "node rocksdb-client-rust/generator.js",
+    "client:all": "npm run client:node && npm run client:python && npm run client:rust",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "handlebars": "^4.7.8"
+    "@types/node": "^20.14.2",
+    "handlebars": "^4.7.8",
+    "regex": "^2.0.0"
   },
   "dependencies": {
     "lodash": "^4.17.21"

@@ -87,7 +87,7 @@ Handlebars.registerHelper('contains', (haystack, needle) => haystack.includes(ne
 Handlebars.registerHelper('replace', (haystack, needle, replacement) => haystack.replace(needle, replacement));
 
 // Чтение JSON-данных
-const data = JSON.parse(fs.readFileSync('../requests_schema.json', 'utf8'));
+const data = JSON.parse(fs.readFileSync(__dirname + '/../requests_schema.json', 'utf8'));
 
 // Генерация методов на основе JSON
 const generateMethods = (requests) => {
@@ -276,6 +276,6 @@ export default RocksDBClient;
     const classCode = template({ methods });
 
 // Запись в файл
-    fs.writeFileSync('src/index.ts', classCode);
+    fs.writeFileSync(__dirname + '/src/index.ts', classCode);
 
     console.log('TypeScript code generated successfully.');

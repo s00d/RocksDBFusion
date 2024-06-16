@@ -72,7 +72,7 @@ const methodTemplate = `
 Handlebars.registerHelper('replace', (haystack, needle, replacement) => haystack.replace(needle, replacement));
 Handlebars.registerHelper('snake_case', (str) => _.snakeCase(str));
 
-const data = JSON.parse(fs.readFileSync('../requests_schema.json', 'utf8'));
+const data = JSON.parse(fs.readFileSync(__dirname + '/../requests_schema.json', 'utf8'));
 
 const generateMethods = (requests) => {
     return requests.map(request => {
@@ -306,6 +306,6 @@ const template = Handlebars.compile(classTemplate);
 const classCode = template({ methods });
 
 // Write the generated code to a Rust file
-fs.writeFileSync('src/lib.rs', classCode);
+fs.writeFileSync(__dirname + '/src/lib.rs', classCode);
 
 console.log('Rust library code generated successfully.');
