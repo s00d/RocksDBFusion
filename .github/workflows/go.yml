@@ -1,0 +1,35 @@
+name: Release go
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.18'
+
+      - name: Prepare module path
+        run: |
+          cd subdir
+
+      - name: Run tests
+        run: |
+          cd subdir
+          go test ./...
+
+      - name: Publish module
+        run: |
+          cd subdir
+          git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git tag -f $(git describe --tags --abbrev=0)
+          git push --tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

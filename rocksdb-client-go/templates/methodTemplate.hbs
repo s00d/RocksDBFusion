@@ -1,0 +1,32 @@
+/**
+ * {{description}}
+ *
+ * {{#each parameters}}@param {{param_type}} {{replace name 'options.' ''}} {{description}}
+ * {{/each}}
+ * @return {Promise<any>} The result of the operation.
+ * @throws {Error} If the operation fails.
+ */
+func (c *RocksDBClient) {{actionUpperFirst}}({{{parametersList}}}) (*Response, error) {
+    request := Request{
+        Action: "{{action}}",
+        Options: map[string]string{},
+    }
+
+    {{#each requiredParameters}}
+    {{#if inOptions}}
+    request.Options["{{replace name 'options.' ''}}"] = {{replace name 'options.' ''}}
+    {{else}}
+    request.{{replace name 'options.' ''}} = {{replace name 'options.' ''}}
+    {{/if}}
+    {{/each}}
+
+    {{#each optionalParameters}}
+    {{#if inOptions}}
+    request.Options["{{replace name 'options.' ''}}"] = {{replace name 'options.' ''}}
+    {{else}}
+    request.{{replace name 'options.' ''}} = {{replace name 'options.' ''}}
+    {{/if}}
+    {{/each}}
+
+    return c.SendRequest(request)
+}

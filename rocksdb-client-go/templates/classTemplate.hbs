@@ -1,0 +1,99 @@
+package rocksdbclient
+
+import (
+    "bufio"
+    "encoding/json"
+    "fmt"
+    "net"
+    "time"
+)
+
+type Request struct {
+    Action       string            `json:"action"`
+    Key          *string           `json:"key,omitempty"`
+    Value        *string           `json:"value,omitempty"`
+    CfName       *string           `json:"cf_name,omitempty"`
+    DefaultValue *string           `json:"default_value,omitempty"`
+    Options      map[string]string `json:"options,omitempty"`
+    Token        *string           `json:"token,omitempty"`
+    Txn          *bool             `json:"txn,omitempty"`
+}
+
+type Response struct {
+    Success bool   `json:"success"`
+    Result  string `json:"result"`
+    Error   string `json:"error"`
+}
+
+type RocksDBClient struct {
+    host         string
+    port         int
+    token        *string
+    timeout      time.Duration
+    retryInterval time.Duration
+    conn         net.Conn
+}
+
+func NewRocksDBClient(host string, port int, token *string, timeout, retryInterval time.Duration) *RocksDBClient {
+    return &RocksDBClient{
+        host:         host,
+        port:         port,
+        token:        token,
+        timeout:      timeout,
+        retryInterval: retryInterval,
+    }
+}
+
+func (c *RocksDBClient) Connect() error {
+    start := time.Now()
+    for {
+        conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", c.host, c.port), c.timeout)
+        if err == nil {
+            c.conn = conn
+            return nil
+        }
+        if time.Since(start) >= c.timeout {
+            return fmt.Errorf("unable to connect to server: %w", err)
+        }
+        time.Sleep(c.retryInterval)
+    }
+}
+
+func (c *RocksDBClient) Close() {
+    if c.conn != nil {
+        c.conn.Close()
+        c.conn = nil
+    }
+}
+
+func (c *RocksDBClient) SendRequest(request Request) (*Response, error) {
+    if c.conn == nil {
+        if err := c.Connect(); err != nil {
+            return nil, err
+        }
+    }
+
+    if c.token != nil {
+        request.Token = c.token
+    }
+
+    encoder := json.NewEncoder(c.conn)
+    if err := encoder.Encode(request); err != nil {
+        return nil, fmt.Errorf("error sending request: %w", err)
+    }
+
+    response := &Response{}
+    decoder := json.NewDecoder(bufio.NewReader(c.conn))
+    if err := decoder.Decode(response); err != nil {
+        return nil, fmt.Errorf("error decoding response: %w", err)
+    }
+
+    if !response.Success {
+        return nil, fmt.Errorf("server error: %s", response.Error)
+    }
+
+    return response, nil
+}
+
+
+{{{methods}}}
