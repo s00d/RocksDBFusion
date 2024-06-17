@@ -23,7 +23,7 @@ export default defineUserConfig({
     // Whether to display repo link, default is `true`
     repoDisplay: true,
 
-    navbar: ['/', 'server/', 'viewer', 'php', 'node', 'rust', 'python'],
+    navbar: ['/', 'server/', 'viewer', 'php', 'node', 'rust', 'python', 'go'],
 
     plugins: {
       mdEnhance: {
