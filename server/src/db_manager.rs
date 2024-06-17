@@ -82,6 +82,7 @@ pub struct RocksDBManager {
     write_batch: Mutex<Option<WriteBatchWithTransaction<false>>>,
     iterators: Mutex<HashMap<usize, (Vec<u8>, rust_rocksdb::Direction)>>,
     iterator_id_counter: AtomicUsize,
+    txn_dbs: Mutex<HashMap<usize, Arc<TransactionDB>>>,
     transactions: Mutex<HashMap<usize, Transaction<'static, TransactionDB>>>,
     transaction_id_counter: AtomicUsize,
 }
@@ -132,6 +133,7 @@ impl RocksDBManager {
         let iterators = Mutex::new(HashMap::new());
         let iterator_id_counter = AtomicUsize::new(0);
         let transactions = Mutex::new(HashMap::new());
+        let txn_dbs = Mutex::new(HashMap::new());
         let transaction_id_counter = AtomicUsize::new(0);
 
         info!("RocksDBManager initialized successfully");
@@ -143,6 +145,7 @@ impl RocksDBManager {
             iterators,
             iterator_id_counter,
             transactions,
+            txn_dbs,
             transaction_id_counter,
         })
     }
@@ -150,44 +153,76 @@ impl RocksDBManager {
     pub fn begin_transaction(&self) -> Result<usize, String> {
         info!("Beginning new transaction");
 
+        self.close()?;
+
         let txn_db_opts = TransactionDBOptions::default();
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_max_open_files(1000);
         opts.set_log_level(rust_rocksdb::LogLevel::Warn);
 
-        let transaction_db =
-            TransactionDB::open(&opts, &txn_db_opts, &self.db_path).map_err(|e| e.to_string())?;
+        let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, &self.db_path)
+            .unwrap_or(vec!["default".to_string()]);
+        let cf_descriptors: Vec<ColumnFamilyDescriptor> = cf_names
+            .iter()
+            .map(|name| {
+                let mut cf_opts = Options::default();
+                cf_opts.set_merge_operator_associative("json_merge", json_merge);
+                ColumnFamilyDescriptor::new(name, cf_opts)
+            })
+            .collect();
+
+        let transaction_db: TransactionDB =
+            TransactionDB::open_cf_descriptors(&opts, &txn_db_opts, &self.db_path, cf_descriptors).map_err(|e| e.to_string())?;
 
         let transaction_db = Arc::new(transaction_db);
         let transaction = create_transaction(&transaction_db);
-
+        //
         let txn_id = self.transaction_id_counter.fetch_add(1, Ordering::SeqCst);
         self.transactions
             .lock()
             .unwrap()
             .insert(txn_id, transaction);
+
+        self.txn_dbs.lock().unwrap().insert(txn_id, transaction_db);
+
         Ok(txn_id)
     }
 
     pub fn commit_transaction(&self, txn_id: usize) -> Result<(), String> {
         info!("Committing transaction with id: {}", txn_id);
         let mut transactions = self.transactions.lock().unwrap();
-        if let Some(txn) = transactions.remove(&txn_id) {
+        let mut txn_dbs = self.txn_dbs.lock().unwrap();
+        let result = if let Some(txn) = transactions.remove(&txn_id) {
             txn.commit().map_err(|e| e.to_string())
         } else {
             Err("Transaction ID not found".to_string())
+        };
+
+        if result.is_ok() {
+            txn_dbs.remove(&txn_id);
         }
+
+        self.reopen()?;
+        result
     }
 
     pub fn rollback_transaction(&self, txn_id: usize) -> Result<(), String> {
         info!("Rolling back transaction with id: {}", txn_id);
         let mut transactions = self.transactions.lock().unwrap();
-        if let Some(txn) = transactions.remove(&txn_id) {
+        let mut txn_dbs = self.txn_dbs.lock().unwrap();
+        let result = if let Some(txn) = transactions.remove(&txn_id) {
             txn.rollback().map_err(|e| e.to_string())
         } else {
             Err("Transaction ID not found".to_string())
+        };
+
+        if result.is_ok() {
+            txn_dbs.remove(&txn_id);
         }
+
+        self.reopen()?;
+        result
     }
 
     pub fn put(
@@ -201,20 +236,18 @@ impl RocksDBManager {
             "Putting key: {}, value: {}, cf_name: {:?}, txn_id: {:?}",
             key, value, cf_name, txn_id
         );
-        let db = self.db.read().unwrap();
-        if db.is_none() {
-            return Err("Database is not open".to_string());
-        }
-        let db = db.as_ref().unwrap();
-        let mut transactions = self.transactions.lock().unwrap();
 
         if let Some(txn_id) = txn_id {
+            let mut transactions = self.transactions.lock().unwrap();
+            let txn_dbs = self.txn_dbs.lock().unwrap();
             let txn = transactions
                 .get_mut(&txn_id)
                 .ok_or("Transaction ID not found")?;
+            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
+
             match cf_name {
                 Some(cf_name) => {
-                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     txn.put_cf(&cf, key.as_bytes(), value.as_bytes())
                         .map_err(|e| e.to_string())
                 }
@@ -223,6 +256,12 @@ impl RocksDBManager {
                     .map_err(|e| e.to_string()),
             }
         } else {
+            let db = self.db.read().unwrap();
+            if db.is_none() {
+                return Err("Database is not open".to_string());
+            }
+            let db = db.as_ref().unwrap();
+
             match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
@@ -247,20 +286,18 @@ impl RocksDBManager {
             "Getting key: {}, cf_name: {:?}, default: {:?}, txn_id: {:?}",
             key, cf_name, default, txn_id
         );
-        let db = self.db.read().unwrap();
-        if db.is_none() {
-            return Err("Database is not open".to_string());
-        }
-        let db = db.as_ref().unwrap();
-        let mut transactions = self.transactions.lock().unwrap();
 
         if let Some(txn_id) = txn_id {
+            let mut transactions = self.transactions.lock().unwrap();
+            let txn_dbs = self.txn_dbs.lock().unwrap();
             let txn = transactions
                 .get_mut(&txn_id)
                 .ok_or("Transaction ID not found")?;
+            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
+
             match cf_name {
                 Some(cf_name) => {
-                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     match txn.get_cf(&cf, key.as_bytes()) {
                         Ok(Some(value)) => {
                             Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?))
@@ -278,6 +315,12 @@ impl RocksDBManager {
                 },
             }
         } else {
+            let db = self.db.read().unwrap();
+            if db.is_none() {
+                return Err("Database is not open".to_string());
+            }
+            let db = db.as_ref().unwrap();
+
             match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
@@ -310,26 +353,29 @@ impl RocksDBManager {
             "Deleting key: {}, cf_name: {:?}, txn_id: {:?}",
             key, cf_name, txn_id
         );
-        let db = self.db.read().unwrap();
-        if db.is_none() {
-            return Err("Database is not open".to_string());
-        }
-        let db = db.as_ref().unwrap();
-        let mut transactions = self.transactions.lock().unwrap();
 
         if let Some(txn_id) = txn_id {
+            let mut transactions = self.transactions.lock().unwrap();
+            let txn_dbs = self.txn_dbs.lock().unwrap();
             let txn = transactions
                 .get_mut(&txn_id)
                 .ok_or("Transaction ID not found")?;
+            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
+
             match cf_name {
                 Some(cf_name) => {
-                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     txn.delete_cf(&cf, key.as_bytes())
                         .map_err(|e| e.to_string())
                 }
                 None => txn.delete(key.as_bytes()).map_err(|e| e.to_string()),
             }
         } else {
+            let db = self.db.read().unwrap();
+            if db.is_none() {
+                return Err("Database is not open".to_string());
+            }
+            let db = db.as_ref().unwrap();
             match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
@@ -351,20 +397,18 @@ impl RocksDBManager {
             "Merging key: {}, value: {}, cf_name: {:?}, txn_id: {:?}",
             key, value, cf_name, txn_id
         );
-        let db = self.db.read().unwrap();
-        if db.is_none() {
-            return Err("Database is not open".to_string());
-        }
-        let db = db.as_ref().unwrap();
+
         let mut transactions = self.transactions.lock().unwrap();
 
         if let Some(txn_id) = txn_id {
+            let txn_dbs = self.txn_dbs.lock().unwrap();
             let txn = transactions
                 .get_mut(&txn_id)
                 .ok_or("Transaction ID not found")?;
+            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
             match cf_name {
                 Some(cf_name) => {
-                    let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
                     txn.merge_cf(&cf, key.as_bytes(), value.as_bytes())
                         .map_err(|e| e.to_string())
                 }
@@ -373,6 +417,11 @@ impl RocksDBManager {
                     .map_err(|e| e.to_string()),
             }
         } else {
+            let db = self.db.read().unwrap();
+            if db.is_none() {
+                return Err("Database is not open".to_string());
+            }
+            let db = db.as_ref().unwrap();
             match cf_name {
                 Some(cf_name) => {
                     let cf = db.cf_handle(&cf_name).ok_or("Column family not found")?;
@@ -509,11 +558,11 @@ impl RocksDBManager {
         Ok(())
     }
 
-    pub fn list_column_families(&self, path: String) -> Result<Vec<String>, String> {
-        debug!("Listing column families for path: {}", path);
+    pub fn list_column_families(&self) -> Result<Vec<String>, String> {
+        debug!("Listing column families for path: {}", self.db_path.clone());
         let opts = Options::default();
         let result =
-            DBWithThreadMode::<MultiThreaded>::list_cf(&opts, path).map_err(|e| e.to_string());
+            DBWithThreadMode::<MultiThreaded>::list_cf(&opts, self.db_path.clone()).map_err(|e| e.to_string());
         debug!("List column families result: {:?}", result);
         result
     }

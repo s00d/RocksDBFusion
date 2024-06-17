@@ -283,13 +283,7 @@
     {
       "action": "list_column_families",
       "description": "Lists all column families in the database.\\nThis function handles the `list_column_families` action which lists all column families in the RocksDB database.\\nThe function requires the path to the database.",
-      "parameters": {
-        "value": {
-          "param_type": "String",
-          "required": true,
-          "description": "The path to the database"
-        }
-      },
+      "parameters": {},
       "response": {
         "success": {
           "param_type": "bool",

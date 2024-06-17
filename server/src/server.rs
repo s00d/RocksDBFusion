@@ -112,7 +112,7 @@ impl RocksDBServer {
             "get_property" => self.handle_get_property(req).await,
             "keys" => self.handle_get_keys(req).await,
             "all" => self.handle_get_all(req).await,
-            "list_column_families" => self.handle_list_column_families(req).await,
+            "list_column_families" => self.handle_list_column_families().await,
             "create_column_family" => self.handle_create_column_family(req).await,
             "drop_column_family" => self.handle_drop_column_family(req).await,
             "compact_range" => self.handle_compact_range(req).await,
@@ -470,34 +470,24 @@ impl RocksDBServer {
      *
      * # Link: list_column_families
      *
-     * # Parameters
-     * - `value`: String - The path to the database
-     *
      * # Returns
      * - `success`: bool - Whether the operation was successful
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_list_column_families(&self, req: Request) -> Response {
-        debug!("handle_list_column_families with value: {:?}", req.value);
-        match req.value {
-            Some(path) => match self.db_manager.list_column_families(path) {
-                Ok(cfs) => Response {
-                    success: true,
-                    result: Some(serde_json::to_string(&cfs).unwrap()),
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e.to_string()),
-                },
+    async fn handle_list_column_families(&self) -> Response {
+        debug!("handle_list_column_families with value");
+        match self.db_manager.list_column_families() {
+            Ok(cfs) => Response {
+                success: true,
+                result: Some(serde_json::to_string(&cfs).unwrap()),
+                error: None,
             },
-            None => Response {
+            Err(e) => Response {
                 success: false,
                 result: None,
-                error: Some("Missing path".to_string()),
-            },
+                error: Some(e.to_string()),
+            }
         }
     }
 
