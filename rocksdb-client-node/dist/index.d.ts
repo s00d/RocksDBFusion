@@ -11,7 +11,7 @@ declare class RocksDBClient {
     timeout: number;
     retryInterval: number;
     /**
-     * Constructor to initialize the RocksDB rocksdb-client-rust.
+     * Constructor to initialize the RocksDB client.
      *
      * @param {string} host The host of the RocksDB server.
      * @param {number} port The port of the RocksDB server.
@@ -69,12 +69,12 @@ declare class RocksDBClient {
      * @param {string} key The key to put
      * @param {string} value The value to put
      * @param {string} cf_name The column family name
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    put(key: string, value: string, cf_name?: string | null, txn_id?: number | null): Promise<string | null>;
+    put(key: string, value: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null>;
     /**
      * Retrieves the value associated with a key from the database.
      * This function handles the `get` action which fetches the value associated with a specified key from the RocksDB database.
@@ -83,12 +83,12 @@ declare class RocksDBClient {
      * @param {string} key The key to get
      * @param {string} cf_name The column family name
      * @param {string} default_value The default value
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    get(key: string, cf_name?: string | null, default_value?: string | null, txn_id?: number | null): Promise<string | null>;
+    get(key: string, cf_name?: string | null, default_value?: string | null, txn?: boolean | null): Promise<string | null>;
     /**
      * Deletes a key-value pair from the database.
      * This function handles the `delete` action which removes a specified key-value pair from the RocksDB database.
@@ -96,12 +96,12 @@ declare class RocksDBClient {
      *
      * @param {string} key The key to delete
      * @param {string} cf_name The column family name
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    delete(key: string, cf_name?: string | null, txn_id?: number | null): Promise<string | null>;
+    delete(key: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null>;
     /**
      * Merges a value with an existing key in the database.
      * This function handles the `merge` action which merges a specified value with an existing key in the RocksDB database.
@@ -110,12 +110,12 @@ declare class RocksDBClient {
      * @param {string} key The key to merge
      * @param {string} value The value to merge
      * @param {string} cf_name The column family name
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    merge(key: string, value: string, cf_name?: string | null, txn_id?: number | null): Promise<string | null>;
+    merge(key: string, value: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null>;
     /**
      * Retrieves a property of the database.
      * This function handles the `get_property` action which fetches a specified property of the RocksDB database.
@@ -133,14 +133,14 @@ declare class RocksDBClient {
      * This function handles the `keys` action which retrieves a range of keys from the RocksDB database.
      * The function can specify a starting index, limit on the number of keys, and a query string to filter keys.
      *
-     * @param {number} start The start index
-     * @param {number} limit The limit of keys to retrieve
+     * @param {string} start The start index
+     * @param {string} limit The limit of keys to retrieve
      * @param {string} query The query string to filter keys
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    keys(start: number, limit: number, query?: string | null): Promise<string | null>;
+    keys(start: string, limit: string, query?: string | null): Promise<string | null>;
     /**
      * Retrieves all keys from the database.
      * This function handles the `all` action which retrieves all keys from the RocksDB database.
@@ -157,12 +157,11 @@ declare class RocksDBClient {
      * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
      * The function requires the path to the database.
      *
-     * @param {string} path The path to the database
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    listColumnFamilies(path: string): Promise<string | null>;
+    listColumnFamilies(): Promise<string | null>;
     /**
      * Creates a new column family in the database.
      * This function handles the `create_column_family` action which creates a new column family in the RocksDB database.
@@ -277,47 +276,46 @@ declare class RocksDBClient {
      * This function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.
      * The function requires the ID of the iterator to destroy.
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    destroyIterator(iterator_id: number): Promise<string | null>;
+    destroyIterator(iterator_id: string): Promise<string | null>;
     /**
      * Seeks to a specific key in the iterator.
      * This function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.
      * The function requires the ID of the iterator, the key to seek, and the direction of the seek (Forward or Reverse).
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      * @param {string} key The key to seek
-     * @param {string} direction The direction of the seek (Forward or Reverse)
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    iteratorSeek(iterator_id: number, key: string, direction: string): Promise<string | null>;
+    iteratorSeek(iterator_id: string, key: string): Promise<string | null>;
     /**
      * Advances the iterator to the next key.
      * This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
      * The function requires the ID of the iterator.
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    iteratorNext(iterator_id: number): Promise<string | null>;
+    iteratorNext(iterator_id: string): Promise<string | null>;
     /**
      * Moves the iterator to the previous key.
      * This function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.
      * The function requires the ID of the iterator.
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    iteratorPrev(iterator_id: number): Promise<string | null>;
+    iteratorPrev(iterator_id: string): Promise<string | null>;
     /**
      * Creates a backup of the database.
      * This function handles the `backup` action which creates a backup of the RocksDB database.
@@ -341,12 +339,12 @@ declare class RocksDBClient {
      * This function handles the `restore` action which restores the RocksDB database from a specified backup.
      * The function requires the ID of the backup to restore.
      *
-     * @param {number} backup_id The ID of the backup to restore
+     * @param {string} backup_id The ID of the backup to restore
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    restore(backup_id: number): Promise<string | null>;
+    restore(backup_id: string): Promise<string | null>;
     /**
      * Retrieves information about all backups.
      * This function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.
@@ -370,22 +368,20 @@ declare class RocksDBClient {
      * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to commit.
      *
-     * @param {number} txn_id The transaction ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    commitTransaction(txn_id: number): Promise<string | null>;
+    commitTransaction(): Promise<string | null>;
     /**
      * Rolls back an existing transaction.
      * This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to roll back.
      *
-     * @param {number} txn_id The transaction ID
      *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    rollbackTransaction(txn_id: number): Promise<string | null>;
+    rollbackTransaction(): Promise<string | null>;
 }
 export default RocksDBClient;
