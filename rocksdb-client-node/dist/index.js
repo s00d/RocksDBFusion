@@ -54,6 +54,7 @@ class RocksDBClient {
     createSocket(host, port) {
         return new Promise((resolve, reject) => {
             const socket = require('net').createConnection({ host, port }, () => {
+                socket.setMaxListeners(20);
                 resolve(socket);
             });
             socket.on('error', reject);
@@ -96,13 +97,21 @@ class RocksDBClient {
     readSocket() {
         return new Promise((resolve, reject) => {
             let data = '';
-            this.socket.on('data', (chunk) => {
+            const onData = (chunk) => {
                 data += chunk;
                 if (data.includes("\n")) {
+                    this.socket.removeListener('data', onData);
+                    this.socket.removeListener('error', onError);
                     resolve(data);
                 }
-            });
-            this.socket.on('error', reject);
+            };
+            const onError = (err) => {
+                this.socket.removeListener('data', onData);
+                this.socket.removeListener('error', onError);
+                reject(err);
+            };
+            this.socket.on('data', onData);
+            this.socket.on('error', onError);
         });
     }
     /**
