@@ -1,4 +1,3 @@
-
 import asyncio
 import socket
 import json
@@ -62,12 +61,11 @@ class RocksDBClient:
             return response['result']
         raise Exception(response['error'])
 
-    
-    async def put(self, key: str, value: str, cf_name: str|None = None, txn: bool|None = None):
+        async def put(self, key: str, value: str, cf_name: str|None = None, txn: bool|None = None):
         """
         Inserts a key-value pair into the database.
-     * This function handles the `put` action which inserts a specified key-value pair into the RocksDB database.
-     * The function can optionally operate within a specified column family and transaction if provided.
+        This function handles the `put` action which inserts a specified key-value pair into the RocksDB database.
+        The function can optionally operate within a specified column family and transaction if provided.
         @param  key: The key to put
         @param  value: The value to put
         @param  cf_name: The column family name
@@ -104,12 +102,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def get(self, key: str, cf_name: str|None = None, default_value: str|None = None, txn: bool|None = None):
         """
         Retrieves the value associated with a key from the database.
-     * This function handles the `get` action which fetches the value associated with a specified key from the RocksDB database.
-     * The function can optionally operate within a specified column family and return a default value if the key is not found.
+        This function handles the `get` action which fetches the value associated with a specified key from the RocksDB database.
+        The function can optionally operate within a specified column family and return a default value if the key is not found.
         @param  key: The key to get
         @param  cf_name: The column family name
         @param  default_value: The default value
@@ -147,12 +144,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def delete(self, key: str, cf_name: str|None = None, txn: bool|None = None):
         """
         Deletes a key-value pair from the database.
-     * This function handles the `delete` action which removes a specified key-value pair from the RocksDB database.
-     * The function can optionally operate within a specified column family and transaction if provided.
+        This function handles the `delete` action which removes a specified key-value pair from the RocksDB database.
+        The function can optionally operate within a specified column family and transaction if provided.
         @param  key: The key to delete
         @param  cf_name: The column family name
         @param  txn: The transaction ID
@@ -184,12 +180,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def merge(self, key: str, value: str, cf_name: str|None = None, txn: bool|None = None):
         """
         Merges a value with an existing key in the database.
-     * This function handles the `merge` action which merges a specified value with an existing key in the RocksDB database.
-     * The function can optionally operate within a specified column family and transaction if provided.
+        This function handles the `merge` action which merges a specified value with an existing key in the RocksDB database.
+        The function can optionally operate within a specified column family and transaction if provided.
         @param  key: The key to merge
         @param  value: The value to merge
         @param  cf_name: The column family name
@@ -226,12 +221,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def get_property(self, value: str, cf_name: str|None = None):
         """
         Retrieves a property of the database.
-     * This function handles the `get_property` action which fetches a specified property of the RocksDB database.
-     * The function can optionally operate within a specified column family if provided.
+        This function handles the `get_property` action which fetches a specified property of the RocksDB database.
+        The function can optionally operate within a specified column family if provided.
         @param  value: The property to get
         @param  cf_name: The column family name
         @return: The result of the operation.
@@ -257,12 +251,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def keys(self, start: str, limit: str, query: str|None = None):
         """
         Retrieves a range of keys from the database.
-     * This function handles the `keys` action which retrieves a range of keys from the RocksDB database.
-     * The function can specify a starting index, limit on the number of keys, and a query string to filter keys.
+        This function handles the `keys` action which retrieves a range of keys from the RocksDB database.
+        The function can specify a starting index, limit on the number of keys, and a query string to filter keys.
         @param  start: The start index
         @param  limit: The limit of keys to retrieve
         @param  query: The query string to filter keys
@@ -293,12 +286,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def all(self, query: str|None = None):
         """
         Retrieves all keys from the database.
-     * This function handles the `all` action which retrieves all keys from the RocksDB database.
-     * The function can specify a query string to filter keys.
+        This function handles the `all` action which retrieves all keys from the RocksDB database.
+        The function can specify a query string to filter keys.
         @param  query: The query string to filter keys
         @return: The result of the operation.
         @rtype: Any
@@ -319,12 +311,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def list_column_families(self, ):
         """
         Lists all column families in the database.
-     * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
-     * The function requires the path to the database.
+        This function handles the `list_column_families` action which lists all column families in the RocksDB database.
+        The function requires the path to the database.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -339,12 +330,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def create_column_family(self, cf_name: str):
         """
         Creates a new column family in the database.
-     * This function handles the `create_column_family` action which creates a new column family in the RocksDB database.
-     * The function requires the name of the column family to create.
+        This function handles the `create_column_family` action which creates a new column family in the RocksDB database.
+        The function requires the name of the column family to create.
         @param  cf_name: The column family name to create
         @return: The result of the operation.
         @rtype: Any
@@ -364,12 +354,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def drop_column_family(self, cf_name: str):
         """
         Drops an existing column family from the database.
-     * This function handles the `drop_column_family` action which drops an existing column family from the RocksDB database.
-     * The function requires the name of the column family to drop.
+        This function handles the `drop_column_family` action which drops an existing column family from the RocksDB database.
+        The function requires the name of the column family to drop.
         @param  cf_name: The column family name to drop
         @return: The result of the operation.
         @rtype: Any
@@ -389,12 +378,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def compact_range(self, start: str|None = None, end: str|None = None, cf_name: str|None = None):
         """
         Compacts a range of keys in the database.
-     * This function handles the `compact_range` action which compacts a specified range of keys in the RocksDB database.
-     * The function can optionally specify the start key, end key, and column family.
+        This function handles the `compact_range` action which compacts a specified range of keys in the RocksDB database.
+        The function can optionally specify the start key, end key, and column family.
         @param  start: The start key
         @param  end: The end key
         @param  cf_name: The column family name
@@ -427,12 +415,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def write_batch_put(self, key: str, value: str, cf_name: str|None = None):
         """
         Adds a key-value pair to the current write batch.
-     * This function handles the `write_batch_put` action which adds a specified key-value pair to the current write batch.
-     * The function can optionally operate within a specified column family.
+        This function handles the `write_batch_put` action which adds a specified key-value pair to the current write batch.
+        The function can optionally operate within a specified column family.
         @param  key: The key to put
         @param  value: The value to put
         @param  cf_name: The column family name
@@ -463,12 +450,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def write_batch_merge(self, key: str, value: str, cf_name: str|None = None):
         """
         Merges a value with an existing key in the current write batch.
-     * This function handles the `write_batch_merge` action which merges a specified value with an existing key in the current write batch.
-     * The function can optionally operate within a specified column family.
+        This function handles the `write_batch_merge` action which merges a specified value with an existing key in the current write batch.
+        The function can optionally operate within a specified column family.
         @param  key: The key to merge
         @param  value: The value to merge
         @param  cf_name: The column family name
@@ -499,12 +485,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def write_batch_delete(self, key: str, cf_name: str|None = None):
         """
         Deletes a key from the current write batch.
-     * This function handles the `write_batch_delete` action which deletes a specified key from the current write batch.
-     * The function can optionally operate within a specified column family.
+        This function handles the `write_batch_delete` action which deletes a specified key from the current write batch.
+        The function can optionally operate within a specified column family.
         @param  key: The key to delete
         @param  cf_name: The column family name
         @return: The result of the operation.
@@ -530,11 +515,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def write_batch_write(self, ):
         """
         Writes the current write batch to the database.
-     * This function handles the `write_batch_write` action which writes the current write batch to the RocksDB database.
+        This function handles the `write_batch_write` action which writes the current write batch to the RocksDB database.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -549,11 +533,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def write_batch_clear(self, ):
         """
         Clears the current write batch.
-     * This function handles the `write_batch_clear` action which clears the current write batch.
+        This function handles the `write_batch_clear` action which clears the current write batch.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -568,11 +551,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def write_batch_destroy(self, ):
         """
         Destroys the current write batch.
-     * This function handles the `write_batch_destroy` action which destroys the current write batch.
+        This function handles the `write_batch_destroy` action which destroys the current write batch.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -587,11 +569,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def create_iterator(self, ):
         """
         Creates a new iterator for the database.
-     * This function handles the `create_iterator` action which creates a new iterator for iterating over the keys in the RocksDB database.
+        This function handles the `create_iterator` action which creates a new iterator for iterating over the keys in the RocksDB database.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -606,12 +587,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def destroy_iterator(self, iterator_id: str):
         """
         Destroys an existing iterator.
-     * This function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.
-     * The function requires the ID of the iterator to destroy.
+        This function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.
+        The function requires the ID of the iterator to destroy.
         @param  iterator_id: The iterator ID
         @return: The result of the operation.
         @rtype: Any
@@ -631,12 +611,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def iterator_seek(self, iterator_id: str, key: str):
         """
         Seeks to a specific key in the iterator.
-     * This function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.
-     * The function requires the ID of the iterator, the key to seek, and the direction of the seek (Forward or Reverse).
+        This function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.
+        The function requires the ID of the iterator, the key to seek, and the direction of the seek (Forward or Reverse).
         @param  iterator_id: The iterator ID
         @param  key: The key to seek
         @return: The result of the operation.
@@ -661,12 +640,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def iterator_next(self, iterator_id: str):
         """
         Advances the iterator to the next key.
-     * This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
-     * The function requires the ID of the iterator.
+        This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
+        The function requires the ID of the iterator.
         @param  iterator_id: The iterator ID
         @return: The result of the operation.
         @rtype: Any
@@ -686,12 +664,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def iterator_prev(self, iterator_id: str):
         """
         Moves the iterator to the previous key.
-     * This function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.
-     * The function requires the ID of the iterator.
+        This function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.
+        The function requires the ID of the iterator.
         @param  iterator_id: The iterator ID
         @return: The result of the operation.
         @rtype: Any
@@ -711,11 +688,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def backup(self, ):
         """
         Creates a backup of the database.
-     * This function handles the `backup` action which creates a backup of the RocksDB database.
+        This function handles the `backup` action which creates a backup of the RocksDB database.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -730,11 +706,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def restore_latest(self, ):
         """
         Restores the database from the latest backup.
-     * This function handles the `restore_latest` action which restores the RocksDB database from the latest backup.
+        This function handles the `restore_latest` action which restores the RocksDB database from the latest backup.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -749,12 +724,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def restore(self, backup_id: str):
         """
         Restores the database from a specified backup.
-     * This function handles the `restore` action which restores the RocksDB database from a specified backup.
-     * The function requires the ID of the backup to restore.
+        This function handles the `restore` action which restores the RocksDB database from a specified backup.
+        The function requires the ID of the backup to restore.
         @param  backup_id: The ID of the backup to restore
         @return: The result of the operation.
         @rtype: Any
@@ -774,11 +748,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def get_backup_info(self, ):
         """
         Retrieves information about all backups.
-     * This function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.
+        This function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -793,11 +766,10 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def begin_transaction(self, ):
         """
         Begins a new transaction.
-     * This function handles the `begin_transaction` action which begins a new transaction in the RocksDB database.
+        This function handles the `begin_transaction` action which begins a new transaction in the RocksDB database.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -812,12 +784,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def commit_transaction(self, ):
         """
         Commits an existing transaction.
-     * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
-     * The function requires the ID of the transaction to commit.
+        This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
+        The function requires the ID of the transaction to commit.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -832,12 +803,11 @@ class RocksDBClient:
         response = await self.send_request(request)
         return self.handle_response(response)
 
-
     async def rollback_transaction(self, ):
         """
         Rolls back an existing transaction.
-     * This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
-     * The function requires the ID of the transaction to roll back.
+        This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
+        The function requires the ID of the transaction to roll back.
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -851,4 +821,5 @@ class RocksDBClient:
 
         response = await self.send_request(request)
         return self.handle_response(response)
+
 

@@ -7,6 +7,7 @@ license = "MIT"
 
 exclude = [
     "/node_modules",
+    "/templates",
     "generator.js",
     "package.json",
     "package-lock.json",

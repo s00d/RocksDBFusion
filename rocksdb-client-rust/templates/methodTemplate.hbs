@@ -1,0 +1,26 @@
+    pub fn {{actionSnake}}(&self, {{{parametersList}}}) -> Result<{{{returnType}}}, String> {
+        let request = RequestBuilder::new("{{action}}")
+            {{#each parameters}}
+            {{#if inOptions}}
+                {{#if required}}
+                .option("{{replace name 'options.' ''}}".to_string(), {{replace name 'options.' ''}}.to_string())
+                {{else}}
+                .option("{{replace name 'options.' ''}}".to_string(), {{replace name 'options.' ''}}.unwrap().to_string())
+                {{/if}}
+            {{else}}
+            {{#if notRequired}}
+            .{{replace name 'options.' ''}}({{replace name 'options.' ''}})
+            {{else}}
+            .{{replace name 'options.' ''}}(Some({{replace name 'options.' ''}}))
+            {{/if}}
+            {{/if}}
+            {{/each}}
+            .build();
+
+        let response = Runtime::new()
+            .unwrap()
+            .block_on(self.request_handler.send_request(request))
+            .map_err(|e| format!("Error sending request: {}", e))?;
+
+        self.request_handler.handle_response(response)
+    }

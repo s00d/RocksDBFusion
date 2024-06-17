@@ -1,0 +1,35 @@
+    /**
+     * {{{description}}}
+     *
+     * {{#each parameters}}@param {{param_type}} {{replace name 'options.' ''}} {{description}}
+     * {{/each}}
+     * @return {Promise<any>} The result of the operation.
+     * @throws {Error} If the operation fails.
+     */
+    async {{actionCamel}}({{{parametersList}}}) {
+      const request: any = {
+          action: '{{action}}',
+          options: {},
+      };
+
+      {{#each requiredParameters}}
+      {{#if (contains name "options.")}}
+      request.options['{{replace name 'options.' ''}}'] = {{replace name 'options.' ''}};
+      {{else}}
+      request['{{name}}'] = {{replace name 'options.' ''}};
+      {{/if}}
+      {{/each}}
+
+      {{#each optionalParameters}}
+      if ({{replace name 'options.' ''}} !== null) {
+          {{#if (contains name "options.")}}
+          request.options['{{replace name 'options.' ''}}'] = {{replace name 'options.' ''}};
+          {{else}}
+          request['{{name}}'] = {{replace name 'options.' ''}};
+          {{/if}}
+      }
+      {{/each}}
+
+      const response = await this.sendRequest(request);
+      return this.handleResponse(response);
+    }

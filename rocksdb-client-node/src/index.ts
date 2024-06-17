@@ -143,7 +143,6 @@ class RocksDBClient {
         throw new Error(response.error);
     }
 
-    
     /**
      * Inserts a key-value pair into the database.
      * This function handles the `put` action which inserts a specified key-value pair into the RocksDB database.
@@ -176,7 +175,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Retrieves the value associated with a key from the database.
@@ -213,7 +211,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Deletes a key-value pair from the database.
      * This function handles the `delete` action which removes a specified key-value pair from the RocksDB database.
@@ -244,7 +241,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Merges a value with an existing key in the database.
@@ -279,7 +275,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Retrieves a property of the database.
      * This function handles the `get_property` action which fetches a specified property of the RocksDB database.
@@ -306,7 +301,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Retrieves a range of keys from the database.
@@ -337,7 +331,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Retrieves all keys from the database.
      * This function handles the `all` action which retrieves all keys from the RocksDB database.
@@ -363,7 +356,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Lists all column families in the database.
      * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
@@ -384,7 +376,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Creates a new column family in the database.
@@ -409,7 +400,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Drops an existing column family from the database.
      * This function handles the `drop_column_family` action which drops an existing column family from the RocksDB database.
@@ -432,7 +422,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Compacts a range of keys in the database.
@@ -467,7 +456,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Adds a key-value pair to the current write batch.
      * This function handles the `write_batch_put` action which adds a specified key-value pair to the current write batch.
@@ -496,7 +484,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Merges a value with an existing key in the current write batch.
@@ -527,7 +514,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Deletes a key from the current write batch.
      * This function handles the `write_batch_delete` action which deletes a specified key from the current write batch.
@@ -555,7 +541,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Writes the current write batch to the database.
      * This function handles the `write_batch_write` action which writes the current write batch to the RocksDB database.
@@ -575,7 +560,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Clears the current write batch.
@@ -597,7 +581,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Destroys the current write batch.
      * This function handles the `write_batch_destroy` action which destroys the current write batch.
@@ -618,7 +601,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Creates a new iterator for the database.
      * This function handles the `create_iterator` action which creates a new iterator for iterating over the keys in the RocksDB database.
@@ -638,7 +620,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Destroys an existing iterator.
@@ -662,7 +643,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Seeks to a specific key in the iterator.
@@ -689,7 +669,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Advances the iterator to the next key.
      * This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
@@ -712,7 +691,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Moves the iterator to the previous key.
@@ -737,7 +715,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Creates a backup of the database.
      * This function handles the `backup` action which creates a backup of the RocksDB database.
@@ -758,7 +735,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Restores the database from the latest backup.
      * This function handles the `restore_latest` action which restores the RocksDB database from the latest backup.
@@ -778,7 +754,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Restores the database from a specified backup.
@@ -803,7 +778,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Retrieves information about all backups.
      * This function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.
@@ -823,7 +797,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Begins a new transaction.
@@ -845,7 +818,6 @@ class RocksDBClient {
       return this.handleResponse(response);
     }
 
-
     /**
      * Commits an existing transaction.
      * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
@@ -866,7 +838,6 @@ class RocksDBClient {
       const response = await this.sendRequest(request);
       return this.handleResponse(response);
     }
-
 
     /**
      * Rolls back an existing transaction.

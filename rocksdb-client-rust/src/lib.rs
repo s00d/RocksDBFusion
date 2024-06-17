@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 use bytes::Bytes;
@@ -191,8 +190,7 @@ impl RocksDBClient {
         }
     }
 
-    
-    pub fn put(&self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
+            pub fn put(&self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("put")
             .key(Some(key))
             .value(Some(value))
@@ -207,7 +205,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn get(&self, key: String, cf_name: Option<String>, default_value: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("get")
@@ -225,7 +222,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn delete(&self, key: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("delete")
             .key(Some(key))
@@ -240,7 +236,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn merge(&self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("merge")
@@ -258,7 +253,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn get_property(&self, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("get_property")
             .value(Some(value))
@@ -272,7 +266,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn keys(&self, start: String, limit: String, query: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("keys")
@@ -289,7 +282,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn all(&self, query: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("all")
                 .option("query".to_string(), query.unwrap().to_string())
@@ -303,7 +295,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn list_column_families(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("list_column_families")
             .build();
@@ -315,7 +306,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn create_column_family(&self, cf_name: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("create_column_family")
@@ -330,7 +320,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn drop_column_family(&self, cf_name: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("drop_column_family")
             .cf_name(Some(cf_name))
@@ -343,7 +332,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn compact_range(&self, start: Option<String>, end: Option<String>, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("compact_range")
@@ -360,7 +348,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn write_batch_put(&self, key: String, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_put")
             .key(Some(key))
@@ -375,7 +362,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn write_batch_merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_merge")
@@ -392,7 +378,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn write_batch_delete(&self, key: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_delete")
             .key(Some(key))
@@ -407,7 +392,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn write_batch_write(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_write")
             .build();
@@ -419,7 +403,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn write_batch_clear(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_clear")
@@ -433,7 +416,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn write_batch_destroy(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_destroy")
             .build();
@@ -445,7 +427,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn create_iterator(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("create_iterator")
@@ -459,7 +440,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn destroy_iterator(&self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("destroy_iterator")
                 .option("iterator_id".to_string(), iterator_id.to_string())
@@ -472,7 +452,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn iterator_seek(&self, iterator_id: String, key: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_seek")
@@ -488,7 +467,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn iterator_next(&self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_next")
                 .option("iterator_id".to_string(), iterator_id.to_string())
@@ -501,7 +479,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn iterator_prev(&self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_prev")
@@ -516,7 +493,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn backup(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("backup")
             .build();
@@ -529,7 +505,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn restore_latest(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("restore_latest")
             .build();
@@ -541,7 +516,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn restore(&self, backup_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("restore")
@@ -556,7 +530,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn get_backup_info(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("get_backup_info")
             .build();
@@ -568,7 +541,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn begin_transaction(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("begin_transaction")
@@ -582,7 +554,6 @@ impl RocksDBClient {
         self.request_handler.handle_response(response)
     }
 
-
     pub fn commit_transaction(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("commit_transaction")
             .build();
@@ -594,7 +565,6 @@ impl RocksDBClient {
 
         self.request_handler.handle_response(response)
     }
-
 
     pub fn rollback_transaction(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("rollback_transaction")

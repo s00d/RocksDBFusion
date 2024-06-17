@@ -1,0 +1,32 @@
+    async def {{actionSnake}}(self, {{{parametersList}}}):
+        """
+        {{{description}}}
+        {{#each parameters}}
+        @param {{{param.param_type}}} {{replace name 'options.' ''}}: {{{description}}}
+        {{/each}}
+        @return: The result of the operation.
+        @rtype: Any
+        @raises Exception: If the operation fails.
+        """
+        request = {
+            "action": "{{{action}}}",
+            "options": {},
+        }
+
+        {{#each requiredParameters}}
+        if "options." in "{{{name}}}":
+            request["options"]["{{{replace name 'options.' ''}}}"] = {{{replace name 'options.' ''}}}
+        else:
+            request["{{{name}}}"] = {{{replace name 'options.' ''}}}
+        {{/each}}
+
+        {{#each optionalParameters}}
+        if {{{replace name 'options.' ''}}} is not None:
+            if "options." in "{{{name}}}":
+                request["options"]["{{{replace name 'options.' ''}}}"] = {{{replace name 'options.' ''}}}
+            else:
+                request["{{{name}}}"] = {{{replace name 'options.' ''}}}
+        {{/each}}
+
+        response = await self.send_request(request)
+        return self.handle_response(response)
