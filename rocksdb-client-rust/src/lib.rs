@@ -23,7 +23,7 @@ pub struct Request {
     backup_id: Option<u32>,
     restore_path: Option<String>,
     iterator_id: Option<usize>,
-    txn_id: Option<usize>,
+    txn: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -118,7 +118,7 @@ impl RequestBuilder {
                 backup_id: None,
                 restore_path: None,
                 iterator_id: None,
-                txn_id: None,
+                txn: None,
             },
         }
     }
@@ -162,8 +162,8 @@ impl RequestBuilder {
         self
     }
     
-    pub fn txn_id(mut self, txn_id: Option<usize>) -> Self {
-        self.request.txn_id = txn_id;
+    pub fn txn(mut self, txn: Option<bool>) -> Self {
+        self.request.txn = txn;
         self
     }
 
@@ -192,12 +192,12 @@ impl RocksDBClient {
     }
 
     
-    pub fn put(&self, key: String, value: String, cf_name: Option<String>, txn_id: Option<usize>) -> Result<Option<String>, String> {
+    pub fn put(&self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("put")
             .key(Some(key))
             .value(Some(value))
             .cf_name(cf_name)
-            .txn_id(txn_id)
+            .txn(txn)
             .build();
 
         let response = Runtime::new()
@@ -209,12 +209,12 @@ impl RocksDBClient {
     }
 
 
-    pub fn get(&self, key: String, cf_name: Option<String>, default_value: Option<String>, txn_id: Option<usize>) -> Result<Option<String>, String> {
+    pub fn get(&self, key: String, cf_name: Option<String>, default_value: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("get")
             .key(Some(key))
             .cf_name(cf_name)
             .default_value(default_value)
-            .txn_id(txn_id)
+            .txn(txn)
             .build();
 
         let response = Runtime::new()
@@ -226,11 +226,11 @@ impl RocksDBClient {
     }
 
 
-    pub fn delete(&self, key: String, cf_name: Option<String>, txn_id: Option<usize>) -> Result<Option<String>, String> {
+    pub fn delete(&self, key: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("delete")
             .key(Some(key))
             .cf_name(cf_name)
-            .txn_id(txn_id)
+            .txn(txn)
             .build();
 
         let response = Runtime::new()
@@ -242,12 +242,12 @@ impl RocksDBClient {
     }
 
 
-    pub fn merge(&self, key: String, value: String, cf_name: Option<String>, txn_id: Option<usize>) -> Result<Option<String>, String> {
+    pub fn merge(&self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("merge")
             .key(Some(key))
             .value(Some(value))
             .cf_name(cf_name)
-            .txn_id(txn_id)
+            .txn(txn)
             .build();
 
         let response = Runtime::new()
@@ -274,7 +274,7 @@ impl RocksDBClient {
     }
 
 
-    pub fn keys(&self, start: usize, limit: usize, query: Option<String>) -> Result<Option<String>, String> {
+    pub fn keys(&self, start: String, limit: String, query: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("keys")
                 .option("start".to_string(), start.to_string())
                 .option("limit".to_string(), limit.to_string())
@@ -304,9 +304,8 @@ impl RocksDBClient {
     }
 
 
-    pub fn list_column_families(&self, value: String) -> Result<Option<String>, String> {
+    pub fn list_column_families(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("list_column_families")
-            .value(Some(value))
             .build();
 
         let response = Runtime::new()
@@ -461,7 +460,7 @@ impl RocksDBClient {
     }
 
 
-    pub fn destroy_iterator(&self, iterator_id: usize) -> Result<Option<String>, String> {
+    pub fn destroy_iterator(&self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("destroy_iterator")
                 .option("iterator_id".to_string(), iterator_id.to_string())
             .build();
@@ -475,7 +474,7 @@ impl RocksDBClient {
     }
 
 
-    pub fn iterator_seek(&self, iterator_id: usize, key: String) -> Result<Option<String>, String> {
+    pub fn iterator_seek(&self, iterator_id: String, key: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_seek")
                 .option("iterator_id".to_string(), iterator_id.to_string())
             .key(Some(key))
@@ -490,7 +489,7 @@ impl RocksDBClient {
     }
 
 
-    pub fn iterator_next(&self, iterator_id: usize) -> Result<Option<String>, String> {
+    pub fn iterator_next(&self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_next")
                 .option("iterator_id".to_string(), iterator_id.to_string())
             .build();
@@ -504,7 +503,7 @@ impl RocksDBClient {
     }
 
 
-    pub fn iterator_prev(&self, iterator_id: usize) -> Result<Option<String>, String> {
+    pub fn iterator_prev(&self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_prev")
                 .option("iterator_id".to_string(), iterator_id.to_string())
             .build();
@@ -544,7 +543,7 @@ impl RocksDBClient {
     }
 
 
-    pub fn restore(&self, backup_id: u32) -> Result<Option<String>, String> {
+    pub fn restore(&self, backup_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("restore")
                 .option("backup_id".to_string(), backup_id.to_string())
             .build();
@@ -584,9 +583,8 @@ impl RocksDBClient {
     }
 
 
-    pub fn commit_transaction(&self, txn_id: usize) -> Result<Option<String>, String> {
+    pub fn commit_transaction(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("commit_transaction")
-            .txn_id(Some(txn_id))
             .build();
 
         let response = Runtime::new()
@@ -598,9 +596,8 @@ impl RocksDBClient {
     }
 
 
-    pub fn rollback_transaction(&self, txn_id: usize) -> Result<Option<String>, String> {
+    pub fn rollback_transaction(&self, ) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("rollback_transaction")
-            .txn_id(Some(txn_id))
             .build();
 
         let response = Runtime::new()

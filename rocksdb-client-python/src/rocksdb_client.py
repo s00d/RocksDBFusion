@@ -63,7 +63,7 @@ class RocksDBClient:
         raise Exception(response['error'])
 
     
-    async def put(self, key: str, value: str, cf_name: str|None = None, txn_id: int|None = None):
+    async def put(self, key: str, value: str, cf_name: str|None = None, txn: bool|None = None):
         """
         Inserts a key-value pair into the database.
      * This function handles the `put` action which inserts a specified key-value pair into the RocksDB database.
@@ -71,7 +71,7 @@ class RocksDBClient:
         @param  key: The key to put
         @param  value: The value to put
         @param  cf_name: The column family name
-        @param  txn_id: The transaction ID
+        @param  txn: The transaction ID
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -95,17 +95,17 @@ class RocksDBClient:
                 request["options"]["cf_name"] = cf_name
             else:
                 request["cf_name"] = cf_name
-        if txn_id is not None:
-            if "options." in "txn_id":
-                request["options"]["txn_id"] = txn_id
+        if txn is not None:
+            if "options." in "txn":
+                request["options"]["txn"] = txn
             else:
-                request["txn_id"] = txn_id
+                request["txn"] = txn
 
         response = await self.send_request(request)
         return self.handle_response(response)
 
 
-    async def get(self, key: str, cf_name: str|None = None, default_value: str|None = None, txn_id: int|None = None):
+    async def get(self, key: str, cf_name: str|None = None, default_value: str|None = None, txn: bool|None = None):
         """
         Retrieves the value associated with a key from the database.
      * This function handles the `get` action which fetches the value associated with a specified key from the RocksDB database.
@@ -113,7 +113,7 @@ class RocksDBClient:
         @param  key: The key to get
         @param  cf_name: The column family name
         @param  default_value: The default value
-        @param  txn_id: The transaction ID
+        @param  txn: The transaction ID
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -138,24 +138,24 @@ class RocksDBClient:
                 request["options"]["default_value"] = default_value
             else:
                 request["default_value"] = default_value
-        if txn_id is not None:
-            if "options." in "txn_id":
-                request["options"]["txn_id"] = txn_id
+        if txn is not None:
+            if "options." in "txn":
+                request["options"]["txn"] = txn
             else:
-                request["txn_id"] = txn_id
+                request["txn"] = txn
 
         response = await self.send_request(request)
         return self.handle_response(response)
 
 
-    async def delete(self, key: str, cf_name: str|None = None, txn_id: int|None = None):
+    async def delete(self, key: str, cf_name: str|None = None, txn: bool|None = None):
         """
         Deletes a key-value pair from the database.
      * This function handles the `delete` action which removes a specified key-value pair from the RocksDB database.
      * The function can optionally operate within a specified column family and transaction if provided.
         @param  key: The key to delete
         @param  cf_name: The column family name
-        @param  txn_id: The transaction ID
+        @param  txn: The transaction ID
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -175,17 +175,17 @@ class RocksDBClient:
                 request["options"]["cf_name"] = cf_name
             else:
                 request["cf_name"] = cf_name
-        if txn_id is not None:
-            if "options." in "txn_id":
-                request["options"]["txn_id"] = txn_id
+        if txn is not None:
+            if "options." in "txn":
+                request["options"]["txn"] = txn
             else:
-                request["txn_id"] = txn_id
+                request["txn"] = txn
 
         response = await self.send_request(request)
         return self.handle_response(response)
 
 
-    async def merge(self, key: str, value: str, cf_name: str|None = None, txn_id: int|None = None):
+    async def merge(self, key: str, value: str, cf_name: str|None = None, txn: bool|None = None):
         """
         Merges a value with an existing key in the database.
      * This function handles the `merge` action which merges a specified value with an existing key in the RocksDB database.
@@ -193,7 +193,7 @@ class RocksDBClient:
         @param  key: The key to merge
         @param  value: The value to merge
         @param  cf_name: The column family name
-        @param  txn_id: The transaction ID
+        @param  txn: The transaction ID
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -217,11 +217,11 @@ class RocksDBClient:
                 request["options"]["cf_name"] = cf_name
             else:
                 request["cf_name"] = cf_name
-        if txn_id is not None:
-            if "options." in "txn_id":
-                request["options"]["txn_id"] = txn_id
+        if txn is not None:
+            if "options." in "txn":
+                request["options"]["txn"] = txn
             else:
-                request["txn_id"] = txn_id
+                request["txn"] = txn
 
         response = await self.send_request(request)
         return self.handle_response(response)
@@ -258,7 +258,7 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def keys(self, start: int, limit: int, query: str|None = None):
+    async def keys(self, start: str, limit: str, query: str|None = None):
         """
         Retrieves a range of keys from the database.
      * This function handles the `keys` action which retrieves a range of keys from the RocksDB database.
@@ -320,12 +320,11 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def list_column_families(self, value: str):
+    async def list_column_families(self, ):
         """
         Lists all column families in the database.
      * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
      * The function requires the path to the database.
-        @param  value: The path to the database
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -335,10 +334,6 @@ class RocksDBClient:
             "options": {},
         }
 
-        if "options." in "value":
-            request["options"]["value"] = value
-        else:
-            request["value"] = value
 
 
         response = await self.send_request(request)
@@ -612,7 +607,7 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def destroy_iterator(self, iterator_id: int):
+    async def destroy_iterator(self, iterator_id: str):
         """
         Destroys an existing iterator.
      * This function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.
@@ -637,7 +632,7 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def iterator_seek(self, iterator_id: int, key: str):
+    async def iterator_seek(self, iterator_id: str, key: str):
         """
         Seeks to a specific key in the iterator.
      * This function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.
@@ -667,7 +662,7 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def iterator_next(self, iterator_id: int):
+    async def iterator_next(self, iterator_id: str):
         """
         Advances the iterator to the next key.
      * This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
@@ -692,7 +687,7 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def iterator_prev(self, iterator_id: int):
+    async def iterator_prev(self, iterator_id: str):
         """
         Moves the iterator to the previous key.
      * This function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.
@@ -755,7 +750,7 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def restore(self, backup_id: int):
+    async def restore(self, backup_id: str):
         """
         Restores the database from a specified backup.
      * This function handles the `restore` action which restores the RocksDB database from a specified backup.
@@ -818,12 +813,11 @@ class RocksDBClient:
         return self.handle_response(response)
 
 
-    async def commit_transaction(self, txn_id: int):
+    async def commit_transaction(self, ):
         """
         Commits an existing transaction.
      * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to commit.
-        @param  txn_id: The transaction ID
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -833,22 +827,17 @@ class RocksDBClient:
             "options": {},
         }
 
-        if "options." in "txn_id":
-            request["options"]["txn_id"] = txn_id
-        else:
-            request["txn_id"] = txn_id
 
 
         response = await self.send_request(request)
         return self.handle_response(response)
 
 
-    async def rollback_transaction(self, txn_id: int):
+    async def rollback_transaction(self, ):
         """
         Rolls back an existing transaction.
      * This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to roll back.
-        @param  txn_id: The transaction ID
         @return: The result of the operation.
         @rtype: Any
         @raises Exception: If the operation fails.
@@ -858,10 +847,6 @@ class RocksDBClient:
             "options": {},
         }
 
-        if "options." in "txn_id":
-            request["options"]["txn_id"] = txn_id
-        else:
-            request["txn_id"] = txn_id
 
 
         response = await self.send_request(request)

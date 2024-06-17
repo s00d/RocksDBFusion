@@ -3,6 +3,7 @@ use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -14,7 +15,7 @@ pub struct Request {
     pub cf_name: Option<String>,
     pub options: Option<HashMap<String, String>>,
     pub token: Option<String>,
-    pub txn_id: Option<usize>,
+    pub txn: Option<bool>,
 }
 
 impl Request {
@@ -139,8 +140,8 @@ impl RocksDBServer {
             "restore" => self.handle_restore_request(req).await,
             "get_backup_info" => self.handle_get_backup_info().await,
             "begin_transaction" => self.handle_begin_transaction().await,
-            "commit_transaction" => self.handle_commit_transaction(req).await,
-            "rollback_transaction" => self.handle_rollback_transaction(req).await,
+            "commit_transaction" => self.handle_commit_transaction().await,
+            "rollback_transaction" => self.handle_rollback_transaction().await,
             _ => Response {
                 success: false,
                 result: None,
@@ -168,7 +169,7 @@ impl RocksDBServer {
      * - `key`: String - The key to put
      * - `value`: String - The value to put
      * - `cf_name`: Option<String> - The column family name
-     * - `txn_id`: Option<usize> - The transaction ID
+     * - `txn`: Option<bool> - The transaction ID
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -179,7 +180,7 @@ impl RocksDBServer {
         debug!("handle_put with key: {:?}, value: {:?}", req.key, req.value);
         match (req.key, req.value) {
             (Some(key), Some(value)) => {
-                match self.db_manager.put(key, value, req.cf_name, req.txn_id) {
+                match self.db_manager.put(key, value, req.cf_name, req.txn) {
                     Ok(_) => Response {
                         success: true,
                         result: None,
@@ -212,7 +213,7 @@ impl RocksDBServer {
      * - `key`: String - The key to get
      * - `cf_name`: Option<String> - The column family name
      * - `default_value`: Option<String> - The default value
-     * - `txn_id`: Option<usize> - The transaction ID
+     * - `txn`: Option<bool> - The transaction ID
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -224,7 +225,7 @@ impl RocksDBServer {
         match req.key {
             Some(key) => match self
                 .db_manager
-                .get(key, req.cf_name, req.default_value, req.txn_id)
+                .get(key, req.cf_name, req.default_value, req.txn)
             {
                 Ok(Some(value)) => Response {
                     success: true,
@@ -261,7 +262,7 @@ impl RocksDBServer {
      * # Parameters
      * - `key`: String - The key to delete
      * - `cf_name`: Option<String> - The column family name
-     * - `txn_id`: Option<usize> - The transaction ID
+     * - `txn`: Option<bool> - The transaction ID
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -271,7 +272,7 @@ impl RocksDBServer {
     async fn handle_delete(&self, req: Request) -> Response {
         debug!("handle_delete with key: {:?}", req.key);
         match req.key {
-            Some(key) => match self.db_manager.delete(key, req.cf_name, req.txn_id) {
+            Some(key) => match self.db_manager.delete(key, req.cf_name, req.txn) {
                 Ok(_) => Response {
                     success: true,
                     result: None,
@@ -303,7 +304,7 @@ impl RocksDBServer {
      * - `key`: String - The key to merge
      * - `value`: String - The value to merge
      * - `cf_name`: Option<String> - The column family name
-     * - `txn_id`: Option<usize> - The transaction ID
+     * - `txn`: Option<bool> - The transaction ID
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -317,7 +318,7 @@ impl RocksDBServer {
         );
         match (req.key, req.value) {
             (Some(key), Some(value)) => {
-                match self.db_manager.merge(key, value, req.cf_name, req.txn_id) {
+                match self.db_manager.merge(key, value, req.cf_name, req.txn) {
                     Ok(_) => Response {
                         success: true,
                         result: None,
@@ -387,8 +388,8 @@ impl RocksDBServer {
      * # Link: keys
      *
      * # Parameters
-     * - `options.start`: usize - The start index
-     * - `options.limit`: usize - The limit of keys to retrieve
+     * - `options.start`: String - The start index
+     * - `options.limit`: String - The limit of keys to retrieve
      * - `options.query`: Option<String> - The query string to filter keys
      *
      * # Returns
@@ -871,7 +872,7 @@ impl RocksDBServer {
      * # Link: destroy_iterator
      *
      * # Parameters
-     * - `options.iterator_id`: usize - The iterator ID
+     * - `options.iterator_id`: String - The iterator ID
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -907,7 +908,7 @@ impl RocksDBServer {
      * # Link: iterator_seek
      *
      * # Parameters
-     * - `options.iterator_id`: usize - The iterator ID
+     * - `options.iterator_id`: String - The iterator ID
      * - `key`: String - The key to seek
      *
      * # Returns
@@ -957,7 +958,7 @@ impl RocksDBServer {
      * # Link: iterator_next
      *
      * # Parameters
-     * - `options.iterator_id`: usize - The iterator ID
+     * - `options.iterator_id`: String - The iterator ID
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -993,7 +994,7 @@ impl RocksDBServer {
      * # Link: iterator_prev
      *
      * # Parameters
-     * - `options.iterator_id`: usize - The iterator ID
+     * - `options.iterator_id`: String - The iterator ID
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -1091,7 +1092,7 @@ impl RocksDBServer {
      * # Link: restore
      *
      * # Parameters
-     * - `options.backup_id`: u32 - The ID of the backup to restore
+     * - `options.backup_id`: String - The ID of the backup to restore
      *
      * # Returns
      * - `success`: bool - Whether the operation was successful
@@ -1169,12 +1170,21 @@ impl RocksDBServer {
      */
     async fn handle_begin_transaction(&self) -> Response {
         debug!("handle_begin_transaction");
+
         match self.db_manager.begin_transaction() {
-            Ok(info) => {
-                let result = serde_json::to_string(&info).unwrap();
+            Ok(_) => {
+                // Schedule a commit after 10 seconds
+                let db_manager = self.db_manager.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    if let Err(e) = db_manager.commit_transaction() {
+                        error!("Failed to commit transaction after timeout: {}", e);
+                    }
+                });
+
                 Response {
                     success: true,
-                    result: Some(result),
+                    result: Some("Transaction started".to_string()),
                     error: None,
                 }
             }
@@ -1194,37 +1204,27 @@ impl RocksDBServer {
      *
      * # Link: commit_transaction
      *
-     * # Parameters
-     * - `txn_id`: usize - The transaction ID
-     *
      * # Returns
      * - `success`: bool - Whether the operation was successful
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_commit_transaction(&self, req: Request) -> Response {
-        debug!("handle_commit_transaction, txn_id: {:?}", req.txn_id);
+    async fn handle_commit_transaction(&self) -> Response {
+        debug!("handle_commit_transaction");
 
-        match req.txn_id {
-            Some(txn_id) => match self.db_manager.commit_transaction(txn_id) {
-                Ok(info) => {
-                    let result = serde_json::to_string(&info).unwrap();
-                    Response {
-                        success: true,
-                        result: Some(result),
-                        error: None,
-                    }
+        match self.db_manager.commit_transaction() {
+            Ok(info) => {
+                let result = serde_json::to_string(&info).unwrap();
+                Response {
+                    success: true,
+                    result: Some(result),
+                    error: None,
                 }
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            None => Response {
+            }
+            Err(e) => Response {
                 success: false,
                 result: None,
-                error: Some("Missing txn_id".to_string()),
+                error: Some(e),
             },
         }
     }
@@ -1237,37 +1237,27 @@ impl RocksDBServer {
      *
      * # Link: rollback_transaction
      *
-     * # Parameters
-     * - `txn_id`: usize - The transaction ID
-     *
      * # Returns
      * - `success`: bool - Whether the operation was successful
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_rollback_transaction(&self, req: Request) -> Response {
-        debug!("handle_rollback_transaction, txn_id: {:?}", req.txn_id);
+    async fn handle_rollback_transaction(&self,) -> Response {
+        debug!("handle_rollback_transaction");
 
-        match req.txn_id {
-            Some(txn_id) => match self.db_manager.rollback_transaction(txn_id) {
-                Ok(info) => {
-                    let result = serde_json::to_string(&info).unwrap();
-                    Response {
-                        success: true,
-                        result: Some(result),
-                        error: None,
-                    }
+        match self.db_manager.rollback_transaction() {
+            Ok(info) => {
+                let result = serde_json::to_string(&info).unwrap();
+                Response {
+                    success: true,
+                    result: Some(result),
+                    error: None,
                 }
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            None => Response {
+            }
+            Err(e) => Response {
                 success: false,
                 result: None,
-                error: Some("Missing txn_id".to_string()),
+                error: Some(e),
             },
         }
     }

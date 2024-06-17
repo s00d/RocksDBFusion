@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
 pub type DbInstance = Arc<RwLock<Option<DBWithThreadMode<MultiThreaded>>>>;
@@ -82,9 +82,9 @@ pub struct RocksDBManager {
     write_batch: Mutex<Option<WriteBatchWithTransaction<false>>>,
     iterators: Mutex<HashMap<usize, (Vec<u8>, rust_rocksdb::Direction)>>,
     iterator_id_counter: AtomicUsize,
-    txn_dbs: Mutex<HashMap<usize, Arc<TransactionDB>>>,
-    transactions: Mutex<HashMap<usize, Transaction<'static, TransactionDB>>>,
-    transaction_id_counter: AtomicUsize,
+    txn_db: Mutex<Option<Arc<TransactionDB>>>,
+    transaction: Mutex<Option<Transaction<'static, TransactionDB>>>,
+    condvar: Condvar,
 }
 
 impl RocksDBManager {
@@ -132,9 +132,6 @@ impl RocksDBManager {
 
         let iterators = Mutex::new(HashMap::new());
         let iterator_id_counter = AtomicUsize::new(0);
-        let transactions = Mutex::new(HashMap::new());
-        let txn_dbs = Mutex::new(HashMap::new());
-        let transaction_id_counter = AtomicUsize::new(0);
 
         info!("RocksDBManager initialized successfully");
 
@@ -144,14 +141,22 @@ impl RocksDBManager {
             write_batch: Mutex::new(Some(WriteBatchWithTransaction::default())),
             iterators,
             iterator_id_counter,
-            transactions,
-            txn_dbs,
-            transaction_id_counter,
+            txn_db: Mutex::new(None),
+            transaction: Mutex::new(None),
+            condvar: Condvar::new(),
         })
     }
 
-    pub fn begin_transaction(&self) -> Result<usize, String> {
+    pub fn begin_transaction(&self) -> Result<(), String> {
         info!("Beginning new transaction");
+
+        let mut txn_db_lock = self.txn_db.lock().unwrap();
+        let mut transaction_lock = self.transaction.lock().unwrap();
+
+        while txn_db_lock.is_some() || transaction_lock.is_some() {
+            txn_db_lock = self.condvar.wait(txn_db_lock).unwrap();
+            transaction_lock = self.condvar.wait(transaction_lock).unwrap();
+        }
 
         self.close()?;
 
@@ -177,51 +182,57 @@ impl RocksDBManager {
 
         let transaction_db = Arc::new(transaction_db);
         let transaction = create_transaction(&transaction_db);
-        //
-        let txn_id = self.transaction_id_counter.fetch_add(1, Ordering::SeqCst);
-        self.transactions
-            .lock()
-            .unwrap()
-            .insert(txn_id, transaction);
 
-        self.txn_dbs.lock().unwrap().insert(txn_id, transaction_db);
+        *txn_db_lock = Some(transaction_db);
+        *transaction_lock = Some(transaction);
 
-        Ok(txn_id)
+        Ok(())
     }
 
-    pub fn commit_transaction(&self, txn_id: usize) -> Result<(), String> {
-        info!("Committing transaction with id: {}", txn_id);
-        let mut transactions = self.transactions.lock().unwrap();
-        let mut txn_dbs = self.txn_dbs.lock().unwrap();
-        let result = if let Some(txn) = transactions.remove(&txn_id) {
-            txn.commit().map_err(|e| e.to_string())
-        } else {
-            Err("Transaction ID not found".to_string())
-        };
+    pub fn commit_transaction(&self) -> Result<(), String> {
+        info!("Committing transaction");
+        let mut transaction_lock = self.transaction.lock().unwrap();
+        let mut txn_db_lock = self.txn_db.lock().unwrap();
 
-        if result.is_ok() {
-            txn_dbs.remove(&txn_id);
+        if transaction_lock.is_none() {
+            return Err("No active transaction to commit".to_string());
         }
 
-        self.reopen()?;
+        let txn = transaction_lock.take().unwrap();
+        let result = txn.commit().map_err(|e| e.to_string());
+
+        *txn_db_lock = None;
+        *transaction_lock = None;
+        self.condvar.notify_all();
+
+        if result.is_ok() {
+            self.reopen().map_err(|e| e.to_string())?;
+        }
+
         result
     }
 
-    pub fn rollback_transaction(&self, txn_id: usize) -> Result<(), String> {
-        info!("Rolling back transaction with id: {}", txn_id);
-        let mut transactions = self.transactions.lock().unwrap();
-        let mut txn_dbs = self.txn_dbs.lock().unwrap();
-        let result = if let Some(txn) = transactions.remove(&txn_id) {
-            txn.rollback().map_err(|e| e.to_string())
-        } else {
-            Err("Transaction ID not found".to_string())
-        };
+    pub fn rollback_transaction(&self) -> Result<(), String> {
+        info!("Rolling back transaction");
+        let mut transaction_lock = self.transaction.lock().unwrap();
+        let mut txn_db_lock = self.txn_db.lock().unwrap();
 
-        if result.is_ok() {
-            txn_dbs.remove(&txn_id);
+        if transaction_lock.is_none() {
+            return Err("No active transaction to rollback".to_string());
         }
 
-        self.reopen()?;
+        let txn = transaction_lock.take().unwrap();
+        let _ = txn.rollback().map_err(|e| e.to_string());
+        let result = txn.commit().map_err(|e| e.to_string());
+
+        *txn_db_lock = None;
+        *transaction_lock = None;
+        self.condvar.notify_all();
+
+        if result.is_ok() {
+            self.reopen().map_err(|e| e.to_string())?;
+        }
+
         result
     }
 
@@ -230,31 +241,39 @@ impl RocksDBManager {
         key: String,
         value: String,
         cf_name: Option<String>,
-        txn_id: Option<usize>,
+        txn: Option<bool>,
     ) -> Result<(), String> {
         debug!(
-            "Putting key: {}, value: {}, cf_name: {:?}, txn_id: {:?}",
-            key, value, cf_name, txn_id
+            "Putting key: {}, value: {}, cf_name: {:?}, txn: {:?}",
+            key, value, cf_name, txn
         );
 
-        if let Some(txn_id) = txn_id {
-            let mut transactions = self.transactions.lock().unwrap();
-            let txn_dbs = self.txn_dbs.lock().unwrap();
-            let txn = transactions
-                .get_mut(&txn_id)
-                .ok_or("Transaction ID not found")?;
-            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
+        let mut transaction_lock = self.transaction.lock().unwrap();
 
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    txn.put_cf(&cf, key.as_bytes(), value.as_bytes())
-                        .map_err(|e| e.to_string())
+        if let Some(txn) = txn {
+            if txn && transaction_lock.is_some() {
+                let txn = transaction_lock.as_ref().unwrap();
+                let txn_db_lock = self.txn_db.lock().unwrap();
+                let txn_db = txn_db_lock.as_ref().unwrap();
+
+                match cf_name {
+                    Some(cf_name) => {
+                        let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                        txn.put_cf(&cf, key.as_bytes(), value.as_bytes())
+                            .map_err(|e| e.to_string())
+                    }
+                    None => txn
+                        .put(key.as_bytes(), value.as_bytes())
+                        .map_err(|e| e.to_string()),
                 }
-                None => txn
-                    .put(key.as_bytes(), value.as_bytes())
-                    .map_err(|e| e.to_string()),
+            } else {
+                Err("Transaction is not active or txn is false".to_string())
             }
+        } else if transaction_lock.is_some() {
+            while transaction_lock.is_some() {
+                transaction_lock = self.condvar.wait(transaction_lock).unwrap(); // Wait for the transaction to complete
+            }
+            self.merge(key, value, cf_name, txn) // Retry the operation
         } else {
             let db = self.db.read().unwrap();
             if db.is_none() {
@@ -280,40 +299,48 @@ impl RocksDBManager {
         key: String,
         cf_name: Option<String>,
         default: Option<String>,
-        txn_id: Option<usize>,
+        txn: Option<bool>,
     ) -> Result<Option<String>, String> {
         debug!(
-            "Getting key: {}, cf_name: {:?}, default: {:?}, txn_id: {:?}",
-            key, cf_name, default, txn_id
+            "Getting key: {}, cf_name: {:?}, default: {:?}, txn: {:?}",
+            key, cf_name, default, txn
         );
 
-        if let Some(txn_id) = txn_id {
-            let mut transactions = self.transactions.lock().unwrap();
-            let txn_dbs = self.txn_dbs.lock().unwrap();
-            let txn = transactions
-                .get_mut(&txn_id)
-                .ok_or("Transaction ID not found")?;
-            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
+        let mut transaction_lock = self.transaction.lock().unwrap();
 
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    match txn.get_cf(&cf, key.as_bytes()) {
+        if let Some(txn) = txn {
+            if txn && transaction_lock.is_some() {
+                let txn = transaction_lock.as_ref().unwrap();
+                let txn_db_lock = self.txn_db.lock().unwrap();
+                let txn_db = txn_db_lock.as_ref().unwrap();
+
+                match cf_name {
+                    Some(cf_name) => {
+                        let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                        match txn.get_cf(&cf, key.as_bytes()) {
+                            Ok(Some(value)) => {
+                                Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?))
+                            }
+                            Ok(None) => Ok(default),
+                            Err(e) => Err(e.to_string()),
+                        }
+                    }
+                    None => match txn.get(key.as_bytes()) {
                         Ok(Some(value)) => {
                             Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?))
                         }
                         Ok(None) => Ok(default),
                         Err(e) => Err(e.to_string()),
-                    }
+                    },
                 }
-                None => match txn.get(key.as_bytes()) {
-                    Ok(Some(value)) => {
-                        Ok(Some(String::from_utf8(value).map_err(|e| e.to_string())?))
-                    }
-                    Ok(None) => Ok(default),
-                    Err(e) => Err(e.to_string()),
-                },
+            } else {
+                Err("Transaction is not active or txn is false".to_string())
             }
+        } else if transaction_lock.is_some() {
+            while transaction_lock.is_some() {
+                transaction_lock = self.condvar.wait(transaction_lock).unwrap(); // Wait for the transaction to complete
+            }
+            self.get(key, cf_name, default, txn) // Retry the operation
         } else {
             let db = self.db.read().unwrap();
             if db.is_none() {
@@ -347,29 +374,37 @@ impl RocksDBManager {
         &self,
         key: String,
         cf_name: Option<String>,
-        txn_id: Option<usize>,
+        txn: Option<bool>,
     ) -> Result<(), String> {
         debug!(
-            "Deleting key: {}, cf_name: {:?}, txn_id: {:?}",
-            key, cf_name, txn_id
+            "Deleting key: {}, cf_name: {:?}, txn: {:?}",
+            key, cf_name, txn
         );
 
-        if let Some(txn_id) = txn_id {
-            let mut transactions = self.transactions.lock().unwrap();
-            let txn_dbs = self.txn_dbs.lock().unwrap();
-            let txn = transactions
-                .get_mut(&txn_id)
-                .ok_or("Transaction ID not found")?;
-            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
+        let mut transaction_lock = self.transaction.lock().unwrap();
 
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    txn.delete_cf(&cf, key.as_bytes())
-                        .map_err(|e| e.to_string())
+        if let Some(txn) = txn {
+            if txn && transaction_lock.is_some() {
+                let txn = transaction_lock.as_ref().unwrap();
+                let txn_db_lock = self.txn_db.lock().unwrap();
+                let txn_db = txn_db_lock.as_ref().unwrap();
+
+                match cf_name {
+                    Some(cf_name) => {
+                        let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                        txn.delete_cf(&cf, key.as_bytes())
+                            .map_err(|e| e.to_string())
+                    }
+                    None => txn.delete(key.as_bytes()).map_err(|e| e.to_string()),
                 }
-                None => txn.delete(key.as_bytes()).map_err(|e| e.to_string()),
+            } else {
+                Err("Transaction is not active or txn is false".to_string())
             }
+        } else if transaction_lock.is_some() {
+            while transaction_lock.is_some() {
+                transaction_lock = self.condvar.wait(transaction_lock).unwrap(); // Wait for the transaction to complete
+            }
+            self.delete(key, cf_name, txn) // Retry the operation
         } else {
             let db = self.db.read().unwrap();
             if db.is_none() {
@@ -391,31 +426,39 @@ impl RocksDBManager {
         key: String,
         value: String,
         cf_name: Option<String>,
-        txn_id: Option<usize>,
+        txn: Option<bool>,
     ) -> Result<(), String> {
         debug!(
-            "Merging key: {}, value: {}, cf_name: {:?}, txn_id: {:?}",
-            key, value, cf_name, txn_id
+            "Merging key: {}, value: {}, cf_name: {:?}, txn: {:?}",
+            key, value, cf_name, txn
         );
 
-        let mut transactions = self.transactions.lock().unwrap();
+        let mut transaction_lock = self.transaction.lock().unwrap();
 
-        if let Some(txn_id) = txn_id {
-            let txn_dbs = self.txn_dbs.lock().unwrap();
-            let txn = transactions
-                .get_mut(&txn_id)
-                .ok_or("Transaction ID not found")?;
-            let txn_db = txn_dbs.get(&txn_id).ok_or("TransactionDB not found")?;
-            match cf_name {
-                Some(cf_name) => {
-                    let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
-                    txn.merge_cf(&cf, key.as_bytes(), value.as_bytes())
-                        .map_err(|e| e.to_string())
+        if let Some(txn) = txn {
+            if txn && transaction_lock.is_some() {
+                let txn = transaction_lock.as_ref().unwrap();
+                let txn_db_lock = self.txn_db.lock().unwrap();
+                let txn_db = txn_db_lock.as_ref().unwrap();
+
+                match cf_name {
+                    Some(cf_name) => {
+                        let cf = txn_db.cf_handle(&cf_name).ok_or("Column family not found")?;
+                        txn.merge_cf(&cf, key.as_bytes(), value.as_bytes())
+                            .map_err(|e| e.to_string())
+                    }
+                    None => txn
+                        .merge(key.as_bytes(), value.as_bytes())
+                        .map_err(|e| e.to_string()),
                 }
-                None => txn
-                    .merge(key.as_bytes(), value.as_bytes())
-                    .map_err(|e| e.to_string()),
+            } else {
+                Err("Transaction is not active or txn is false".to_string())
             }
+        } else if transaction_lock.is_some() {
+            while transaction_lock.is_some() {
+                transaction_lock = self.condvar.wait(transaction_lock).unwrap(); // Wait for the transaction to complete
+            }
+            self.delete(key, cf_name, txn) // Retry the operation
         } else {
             let db = self.db.read().unwrap();
             if db.is_none() {

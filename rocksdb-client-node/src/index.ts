@@ -152,12 +152,12 @@ class RocksDBClient {
      * @param {string} key The key to put
      * @param {string} value The value to put
      * @param {string} cf_name The column family name
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async put(key: string , value: string , cf_name: string|null  = null, txn_id: number|null  = null) {
+    async put(key: string , value: string , cf_name: string|null  = null, txn: boolean|null  = null) {
       const request: any = {
           action: 'put',
           options: {},
@@ -169,8 +169,8 @@ class RocksDBClient {
       if (cf_name !== null) {
           request['cf_name'] = cf_name;
       }
-      if (txn_id !== null) {
-          request['txn_id'] = txn_id;
+      if (txn !== null) {
+          request['txn'] = txn;
       }
 
       const response = await this.sendRequest(request);
@@ -186,12 +186,12 @@ class RocksDBClient {
      * @param {string} key The key to get
      * @param {string} cf_name The column family name
      * @param {string} default_value The default value
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async get(key: string , cf_name: string|null  = null, default_value: string|null  = null, txn_id: number|null  = null) {
+    async get(key: string , cf_name: string|null  = null, default_value: string|null  = null, txn: boolean|null  = null) {
       const request: any = {
           action: 'get',
           options: {},
@@ -205,12 +205,11 @@ class RocksDBClient {
       if (default_value !== null) {
           request['default_value'] = default_value;
       }
-      if (txn_id !== null) {
-          request['txn_id'] = txn_id;
+      if (txn !== null) {
+          request['txn'] = txn;
       }
 
       const response = await this.sendRequest(request);
-
       return this.handleResponse(response);
     }
 
@@ -222,12 +221,12 @@ class RocksDBClient {
      *
      * @param {string} key The key to delete
      * @param {string} cf_name The column family name
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async delete(key: string , cf_name: string|null  = null, txn_id: number|null  = null) {
+    async delete(key: string , cf_name: string|null  = null, txn: boolean|null  = null) {
       const request: any = {
           action: 'delete',
           options: {},
@@ -238,8 +237,8 @@ class RocksDBClient {
       if (cf_name !== null) {
           request['cf_name'] = cf_name;
       }
-      if (txn_id !== null) {
-          request['txn_id'] = txn_id;
+      if (txn !== null) {
+          request['txn'] = txn;
       }
 
       const response = await this.sendRequest(request);
@@ -255,12 +254,12 @@ class RocksDBClient {
      * @param {string} key The key to merge
      * @param {string} value The value to merge
      * @param {string} cf_name The column family name
-     * @param {number} txn_id The transaction ID
+     * @param {boolean} txn The transaction ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async merge(key: string , value: string , cf_name: string|null  = null, txn_id: number|null  = null) {
+    async merge(key: string , value: string , cf_name: string|null  = null, txn: boolean|null  = null) {
       const request: any = {
           action: 'merge',
           options: {},
@@ -272,8 +271,8 @@ class RocksDBClient {
       if (cf_name !== null) {
           request['cf_name'] = cf_name;
       }
-      if (txn_id !== null) {
-          request['txn_id'] = txn_id;
+      if (txn !== null) {
+          request['txn'] = txn;
       }
 
       const response = await this.sendRequest(request);
@@ -314,14 +313,14 @@ class RocksDBClient {
      * This function handles the `keys` action which retrieves a range of keys from the RocksDB database.
      * The function can specify a starting index, limit on the number of keys, and a query string to filter keys.
      *
-     * @param {number} start The start index
-     * @param {number} limit The limit of keys to retrieve
+     * @param {string} start The start index
+     * @param {string} limit The limit of keys to retrieve
      * @param {string} query The query string to filter keys
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async keys(start: number , limit: number , query: string|null  = null) {
+    async keys(start: string , limit: string , query: string|null  = null) {
       const request: any = {
           action: 'keys',
           options: {},
@@ -646,12 +645,12 @@ class RocksDBClient {
      * This function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.
      * The function requires the ID of the iterator to destroy.
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async destroyIterator(iterator_id: number ) {
+    async destroyIterator(iterator_id: string ) {
       const request: any = {
           action: 'destroy_iterator',
           options: {},
@@ -670,13 +669,13 @@ class RocksDBClient {
      * This function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.
      * The function requires the ID of the iterator, the key to seek, and the direction of the seek (Forward or Reverse).
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      * @param {string} key The key to seek
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async iteratorSeek(iterator_id: number , key: string ) {
+    async iteratorSeek(iterator_id: string , key: string ) {
       const request: any = {
           action: 'iterator_seek',
           options: {},
@@ -696,12 +695,12 @@ class RocksDBClient {
      * This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
      * The function requires the ID of the iterator.
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async iteratorNext(iterator_id: number ) {
+    async iteratorNext(iterator_id: string ) {
       const request: any = {
           action: 'iterator_next',
           options: {},
@@ -720,12 +719,12 @@ class RocksDBClient {
      * This function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.
      * The function requires the ID of the iterator.
      *
-     * @param {number} iterator_id The iterator ID
+     * @param {string} iterator_id The iterator ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async iteratorPrev(iterator_id: number ) {
+    async iteratorPrev(iterator_id: string ) {
       const request: any = {
           action: 'iterator_prev',
           options: {},
@@ -786,12 +785,12 @@ class RocksDBClient {
      * This function handles the `restore` action which restores the RocksDB database from a specified backup.
      * The function requires the ID of the backup to restore.
      *
-     * @param {number} backup_id The ID of the backup to restore
+     * @param {string} backup_id The ID of the backup to restore
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async restore(backup_id: number ) {
+    async restore(backup_id: string ) {
       const request: any = {
           action: 'restore',
           options: {},
@@ -852,18 +851,16 @@ class RocksDBClient {
      * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to commit.
      *
-     * @param {number} txn_id The transaction ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async commitTransaction(txn_id: number ) {
+    async commitTransaction() {
       const request: any = {
           action: 'commit_transaction',
           options: {},
       };
 
-      request['txn_id'] = txn_id;
 
 
       const response = await this.sendRequest(request);
@@ -876,18 +873,16 @@ class RocksDBClient {
      * This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to roll back.
      *
-     * @param {number} txn_id The transaction ID
      * 
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    async rollbackTransaction(txn_id: number ) {
+    async rollbackTransaction() {
       const request: any = {
           action: 'rollback_transaction',
           options: {},
       };
 
-      request['txn_id'] = txn_id;
 
 
       const response = await this.sendRequest(request);

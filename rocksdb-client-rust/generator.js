@@ -126,7 +126,7 @@ pub struct Request {
     backup_id: Option<u32>,
     restore_path: Option<String>,
     iterator_id: Option<usize>,
-    txn_id: Option<usize>,
+    txn: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -221,7 +221,7 @@ impl RequestBuilder {
                 backup_id: None,
                 restore_path: None,
                 iterator_id: None,
-                txn_id: None,
+                txn: None,
             },
         }
     }
@@ -265,8 +265,8 @@ impl RequestBuilder {
         self
     }
     
-    pub fn txn_id(mut self, txn_id: Option<usize>) -> Self {
-        self.request.txn_id = txn_id;
+    pub fn txn(mut self, txn: Option<bool>) -> Self {
+        self.request.txn = txn;
         self
     }
 
