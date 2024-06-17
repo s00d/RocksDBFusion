@@ -134,11 +134,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set directory for installing cross
-        id: set-cross-dir
-        shell: bash
-        run: set-cross-dir.sh
-
       - uses: actions/cache@v4
         with:
           path: |
@@ -150,7 +145,6 @@ jobs:
             C:\Users\runneradmin\.cargo\registry\cache\
             C:\Users\runneradmin\.cargo\git\db\
             target/
-            ${{ steps.set-cross-dir.outputs.cross-dir }}/cross
           key: ${{ runner.os }}-cargo-${{ matrix.platform.target }}
 
       - name: Install dependencies
