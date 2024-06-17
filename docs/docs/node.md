@@ -163,3 +163,80 @@ Rolls back a transaction.
 ```javascript
 await client.rollbackTransaction(txnId);
 ```
+
+### Iterators
+
+The client provides methods to create and use iterators for traversing keys in the database.
+
+#### createIterator
+
+Creates a new iterator for the database.
+
+```javascript
+const iteratorId = await client.createIterator();
+```
+
+#### iteratorSeek
+
+Seeks to a specific key in the iterator.
+
+```javascript
+const currentKey = await client.iteratorSeek(iteratorId, 'start_key');
+```
+
+#### iteratorNext
+
+Advances the iterator to the next key.
+
+```javascript
+const nextKey = await client.iteratorNext(iteratorId);
+```
+
+#### iteratorPrev
+
+Moves the iterator to the previous key.
+
+```javascript
+const prevKey = await client.iteratorPrev(iteratorId);
+```
+
+#### destroyIterator
+
+Destroys an existing iterator.
+
+```javascript
+await client.destroyIterator(iteratorId);
+```
+
+### Example Usage
+
+Here's an example of how to use the iterator methods:
+
+```javascript
+const keys = ['key1', 'key2', 'key3'];
+const values = ['value1', 'value2', 'value3'];
+
+// Adding keys and values to the database
+for (let i = 0; i < keys.length; i++) {
+    await client.put(keys[i], values[i]);
+}
+
+// Creating an iterator
+const iteratorId = await client.createIterator();
+if (!iteratorId) throw new Error("Failed to create iterator");
+
+// Seeking to the start key
+let currentKey = await client.iteratorSeek(iteratorId, 'key1');
+let result = [];
+
+// Iterating over the keys
+while (currentKey) {
+    const [key, value] = currentKey.split(':');
+    if (key === 'invalid') break;
+    result.push({ key, value });
+    currentKey = await client.iteratorNext(iteratorId);
+}
+
+// Destroying the iterator
+await client.destroyIterator(iteratorId);
+```

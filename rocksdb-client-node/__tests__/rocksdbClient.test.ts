@@ -184,7 +184,43 @@ test('should seek in iterator', async () => {
     if (!iteratorId) return;
 
     const response = await client.iteratorSeek(iteratorId, 'seek_key');
-    expect(response).toBe('seek_key');
+    expect(response).toBe('seek_key:seek_value');
+
+    await client.destroyIterator(iteratorId);
+});
+
+test('should add multiple keys and retrieve using iterator', async () => {
+    const numKeys = 20;
+    const keys = Array.from({ length: numKeys }, (_, i) => `key${i + 1}`);
+    const values = Array.from({ length: numKeys }, (_, i) => `value${i + 1}`);
+
+    for (let i = 0; i < keys.length; i++) {
+        await client.put(keys[i], values[i]);
+    }
+
+    const iteratorId = await client.createIterator();
+    expect(iteratorId).toBeDefined();
+    if (!iteratorId) return;
+
+    let currentKey = await client.iteratorSeek(iteratorId, keys[0]);
+    let result = [];
+    while (currentKey) {
+        const [key, value] = currentKey.split(':');
+        if(key === 'invalid') break;
+        result.push({ key, value });
+        currentKey = await client.iteratorNext(iteratorId);
+    }
+
+    const expectedElements = [
+        { key: 'key1', value: 'value1' },
+        { key: 'key2', value: 'value2' },
+        { key: 'key3', value: 'value3' },
+        // Add more expected elements as needed
+    ];
+
+    for (const expectedElement of expectedElements) {
+        expect(result).toEqual(expect.arrayContaining([expectedElement]));
+    }
 
     await client.destroyIterator(iteratorId);
 });

@@ -854,14 +854,18 @@ impl RocksDBManager {
             if let Some(iterator) = iterators.get_mut(&iterator_id) {
                 let mut iter =
                     db.iterator(rust_rocksdb::IteratorMode::From(key.as_bytes(), direction));
-                if let Some(Ok((k, _))) = iter.next() {
+                if let Some(Ok((k, v))) = iter.next() {
                     iterator.0 = k.to_vec();
                     iterator.1 = direction;
-                    let result = Ok(String::from_utf8(k.to_vec()).unwrap());
+                    let result = Ok(format!(
+                        "{}:{}",
+                        String::from_utf8(k.to_vec()).unwrap(),
+                        String::from_utf8(v.to_vec()).unwrap()
+                    ));
                     debug!("Iterator seek result: {:?}", result);
                     result
                 } else {
-                    Err("Iterator is invalid".to_string())
+                    Ok(String::from("invalid:invalid"))
                 }
             } else {
                 Err("Iterator ID not found".to_string())
@@ -881,7 +885,8 @@ impl RocksDBManager {
                 let mut iter = db.iterator(rust_rocksdb::IteratorMode::From(pos, direction));
                 iter.next(); // Move to current position
                 if let Some(Ok((k, v))) = iter.next() {
-                    pos.clone_from_slice(&*k);
+                    pos.clear();
+                    pos.extend_from_slice(&k);
                     let result = Ok(format!(
                         "{}:{}",
                         String::from_utf8(k.to_vec()).unwrap(),
@@ -890,7 +895,7 @@ impl RocksDBManager {
                     debug!("Iterator next result: {:?}", result);
                     result
                 } else {
-                    Err("Iterator is invalid".to_string())
+                    Ok(String::from("invalid:invalid"))
                 }
             } else {
                 Err("Iterator ID not found".to_string())
@@ -913,7 +918,8 @@ impl RocksDBManager {
                 ));
                 iter.next(); // Move to current position
                 if let Some(Ok((k, v))) = iter.next() {
-                    pos.clone_from_slice(&*k);
+                    pos.clear();
+                    pos.extend_from_slice(&k);
                     let result = Ok(format!(
                         "{}:{}",
                         String::from_utf8(k.to_vec()).unwrap(),
@@ -922,7 +928,7 @@ impl RocksDBManager {
                     debug!("Iterator prev result: {:?}", result);
                     result
                 } else {
-                    Err("Iterator is invalid".to_string())
+                    Ok(String::from("invalid:invalid"))
                 }
             } else {
                 Err("Iterator ID not found".to_string())
