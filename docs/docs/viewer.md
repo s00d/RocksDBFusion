@@ -56,7 +56,9 @@ xattr -cr ./rocksdb-viewer.app && codesign --force --deep --sign - ./rocksdb-vie
 
 ### Pre-built Versions
 
-Pre-built versions of the application are available in the [Releases](https://github.com/s00d/RocksDBFusion/releases) section. You can download the appropriate version for your operating system and run the application directly.
+Pre-built versions of the application are available in the [Releases](https://github.com/s00d/RocksDBFusion/releases). You can download the appropriate version for your operating system and run the application directly.
+
+For the specific version mentioned, you can download it from [this link](https://github.com/s00d/RocksDBFusion/releases/tag/app-v0.0.1).
 
 ## How It Works
 
