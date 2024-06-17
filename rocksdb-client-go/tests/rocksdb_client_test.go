@@ -2,7 +2,7 @@ package rocksdbclient_test
 
 import (
 	"encoding/json"
-	rocksdbclient "github.com/s00d/rocksdb-client-go/src"
+	rocksdbclient "github.com/s00d/RocksDBFusion/rocksdb-client-go/src"
 	"reflect"
 	"testing"
 	"time"
