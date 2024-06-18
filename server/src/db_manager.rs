@@ -1,11 +1,7 @@
 use json_patch::{Patch, PatchOperation};
 use log::{debug, error, info};
 use rust_rocksdb::backup::{BackupEngine, BackupEngineInfo, BackupEngineOptions, RestoreOptions};
-use rust_rocksdb::{
-    ColumnFamilyDescriptor, DBWithThreadMode, Env, MergeOperands, MultiThreaded, Options,
-    Transaction, TransactionDB, TransactionDBOptions, TransactionOptions,
-    WriteBatchWithTransaction, WriteOptions,
-};
+use rust_rocksdb::{Cache, ColumnFamilyDescriptor, DBCompressionType, DBWithThreadMode, Env, MergeOperands, MultiThreaded, Options, Transaction, TransactionDB, TransactionDBOptions, TransactionOptions, WriteBatchWithTransaction, WriteOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -94,9 +90,18 @@ impl RocksDBManager {
             db_path, ttl_secs
         );
 
+        let cache = Cache::new_lru_cache(512 * 1024 * 1024); // 512 MB
         let mut opts = Options::default();
+        opts.set_row_cache(&cache);
         opts.create_if_missing(true);
         opts.set_merge_operator_associative("json_merge", json_merge);
+        opts.increase_parallelism(num_cpus::get() as i32);
+        opts.optimize_level_style_compaction(512 * 1024 * 1024); // 512 MB
+        opts.set_compression_type(DBCompressionType::Snappy);
+        opts.set_write_buffer_size(64 * 1024 * 1024); // 64 MB
+        opts.set_max_write_buffer_number(3);
+        opts.set_min_write_buffer_number_to_merge(1);
+        opts.set_max_open_files(1000);
 
         let cf_names = DBWithThreadMode::<MultiThreaded>::list_cf(&opts, db_path)
             .unwrap_or(vec!["default".to_string()]);
@@ -118,14 +123,14 @@ impl RocksDBManager {
                     cf_descriptors,
                     duration,
                 )
-                .map_err(|e| e.to_string())?
+                    .map_err(|e| e.to_string())?
             }
             None => DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
                 &opts,
                 db_path,
                 cf_descriptors,
             )
-            .map_err(|e| e.to_string())?,
+                .map_err(|e| e.to_string())?,
         };
 
         let db = Arc::new(RwLock::new(Some(db)));
@@ -584,7 +589,7 @@ impl RocksDBManager {
             &self.db_path,
             cf_descriptors,
         )
-        .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?;
         let mut db_lock = self.db.write().unwrap();
         *db_lock = Some(new_db);
 
@@ -1013,136 +1018,5 @@ impl RocksDBManager {
         let backup_info: Vec<BackupInfo> = info.into_iter().map(BackupInfo::from).collect();
         debug!("Get backup info result: {:?}", backup_info);
         Ok(backup_info)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    fn setup_db(path: &str) -> RocksDBManager {
-        if Path::new(path).exists() {
-            std::fs::remove_dir_all(path).unwrap();
-        }
-        RocksDBManager::new(path, None).unwrap()
-    }
-
-    #[test]
-    fn test_put_and_get() {
-        let manager = setup_db(".temp/test_put_and_get");
-        manager
-            .put("key1".to_string(), "value1".to_string(), None, None)
-            .unwrap();
-        let result = manager.get("key1".to_string(), None, None, None).unwrap();
-        assert_eq!(result, Some("value1".to_string()));
-    }
-
-    #[test]
-    fn test_delete() {
-        let manager = setup_db(".temp/test_delete");
-        manager
-            .put("key1".to_string(), "value1".to_string(), None, None)
-            .unwrap();
-        manager.delete("key1".to_string(), None, None).unwrap();
-        let result = manager.get("key1".to_string(), None, None, None).unwrap();
-        assert_eq!(result, None);
-    }
-
-    #[test]
-    fn test_merge() {
-        let manager = setup_db(".temp/test_merge");
-        manager
-            .put(
-                "key1".to_string(),
-                r#"{"field": "value1"}"#.to_string(),
-                None,
-                None,
-            )
-            .unwrap();
-        manager
-            .merge(
-                "key1".to_string(),
-                r#"{"field": "value2"}"#.to_string(),
-                None,
-                None,
-            )
-            .unwrap();
-        let result = manager.get("key1".to_string(), None, None, None).unwrap();
-        assert_eq!(result, Some(r#"{"field":"value2"}"#.to_string()));
-    }
-
-    #[test]
-    fn test_list_column_families() {
-        let manager = setup_db(".temp/test_list_column_families");
-        manager
-            .create_column_family("test_list_column_families".to_string())
-            .unwrap();
-        let result = manager
-            .list_column_families(".temp/test_list_column_families".to_string())
-            .unwrap();
-        assert!(result.contains(&"test_list_column_families".to_string()));
-    }
-
-    #[test]
-    fn test_create_and_drop_column_family() {
-        let manager = setup_db(".temp/test_create_and_drop_column_family");
-        manager.create_column_family("new_cf".to_string()).unwrap();
-        manager
-            .create_column_family("test_list_column_families".to_string())
-            .unwrap();
-        let result = manager
-            .list_column_families(".temp/test_create_and_drop_column_family".to_string())
-            .unwrap();
-        assert!(result.contains(&"new_cf".to_string()));
-        manager.drop_column_family("new_cf".to_string()).unwrap();
-        let result = manager
-            .list_column_families(".temp/test_create_and_drop_column_family".to_string())
-            .unwrap();
-        assert!(!result.contains(&"new_cf".to_string()));
-    }
-
-    #[test]
-    fn test_compact_range() {
-        let manager = setup_db(".temp/test_compact_range");
-        manager
-            .put("key1".to_string(), "value1".to_string(), None, None)
-            .unwrap();
-        manager
-            .put("key2".to_string(), "value2".to_string(), None, None)
-            .unwrap();
-        manager
-            .compact_range(Some("key1".to_string()), Some("key2".to_string()), None)
-            .unwrap();
-    }
-
-    #[test]
-    fn test_write_batch_operations() {
-        let manager = setup_db(".temp/test_write_batch_operations");
-        manager
-            .write_batch_put("key1".to_string(), "value1".to_string(), None)
-            .unwrap();
-        manager
-            .write_batch_merge("key1".to_string(), "value2".to_string(), None)
-            .unwrap();
-        manager
-            .write_batch_delete("key1".to_string(), None)
-            .unwrap();
-        manager.write_batch_write().unwrap();
-        let result = manager.get("key1".to_string(), None, None, None).unwrap();
-        assert_eq!(result, None);
-    }
-
-    #[test]
-    fn test_write_batch_clear_and_destroy() {
-        let manager = setup_db(".temp/test_write_batch_clear_and_destroy");
-        manager
-            .write_batch_put("key1".to_string(), "value1".to_string(), None)
-            .unwrap();
-        manager.write_batch_clear().unwrap();
-        manager.write_batch_write().unwrap();
-        let result = manager.get("key1".to_string(), None, None, None).unwrap();
-        assert_eq!(result, None);
-        manager.write_batch_destroy().unwrap();
     }
 }

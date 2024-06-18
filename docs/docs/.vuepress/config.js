@@ -1,4 +1,3 @@
-import { defaultTheme } from '@vuepress/theme-default'
 import { defineUserConfig } from 'vuepress/cli'
 import { viteBundler } from '@vuepress/bundler-vite'
 import { hopeTheme } from "vuepress-theme-hope";
@@ -13,7 +12,7 @@ export default defineUserConfig({
 
 
   theme: hopeTheme({
-    logo: 'https://vuejs.press/images/hero.png',
+    logo: '/app.png',
 
     // Assuming GitHub. Can also be a full url.
     repo: "s00d/RocksDBFusion",

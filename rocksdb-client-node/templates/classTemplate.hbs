@@ -11,6 +11,7 @@ class RocksDBClient {
     socket: any;
     timeout: number;
     retryInterval: number;
+    private pool: any[];
 
     /**
      * Constructor to initialize the RocksDB client.
@@ -28,113 +29,66 @@ class RocksDBClient {
         this.timeout = timeout;
         this.retryInterval = retryInterval;
         this.socket = null;
+
+        this.pool = [];
     }
 
     /**
-     * Connects to the RocksDB server with retry mechanism.
-     *
-     * @throws {Error} If unable to connect to the server.
-     */
-    async connect(): Promise<void> {
-        const startTime = Date.now();
-
-        while (true) {
-            try {
-                this.socket = await this.createSocket(this.host, this.port);
-                return; // Connection successful
-            } catch (error: any) {
-                if ((Date.now() - startTime) >= this.timeout * 1000) {
-                    throw new Error(`Unable to connect to server: ${error.message}`);
-                }
-                await this.sleep(this.retryInterval * 1000);
-            }
-        }
-    }
-    
-    /**
-     * Closes the socket connection.
+     * Closes all connections in the pool.
      */
     close(): void {
-        if (this.socket) {
-            this.socket.end();
-            this.socket = null;
+        for (const socket of this.pool) {
+            socket.end();
         }
+        this.pool = [];
     }
 
-    /**
-     * Creates a socket connection.
-     * @private
-     */
-    createSocket(host: string, port: number): Promise<any> {
+    private async createSocket(host: string, port: number): Promise<any> {
         return new Promise((resolve, reject) => {
-            const socket = require('net').createConnection({ host, port }, () => {
-                socket.setMaxListeners(20);
+            const socket = createConnection({ host, port }, () => {
+                socket.setMaxListeners(3000);
                 resolve(socket);
             });
             socket.on('error', reject);
         });
     }
 
-    /**
-     * Sleeps for the given number of milliseconds.
-     * @private
-     */
-    sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    private async getConnection(): Promise<any> {
+        if (this.pool.length > 0) {
+            return this.pool.pop();
+        }
+        return this.createSocket(this.host, this.port);
     }
 
-    /**
-     * Sends a request to the RocksDB server.
-     *
-     * @param {object} request The request to be sent.
-     * @return {Promise<object>} The response from the server.
-     * @throws {Error} If the response from the server is invalid.
-     */
-    async sendRequest(request: object): Promise<RocksDBResponse> {
-        if (!this.socket) {
-            await this.connect();
-        }
+    private releaseConnection(socket: any) {
+        this.pool.push(socket);
+    }
 
+    async sendRequest(request: object): Promise<RocksDBResponse> {
         if (this.token !== null) {
-            (request as any).token = this.token; // Add token to request if present
+            (request as any).token = this.token;
         }
 
         const requestJson = JSON.stringify(request) + "\n";
-        this.socket.write(requestJson);
+        const socket = await this.getConnection();
+        socket.write(requestJson);
 
-        const responseJson = await this.readSocket();
-        const response = JSON.parse(responseJson);
-
-        if (response === null) {
-            throw new Error("Invalid response from server");
-        }
-
-        return response;
-    }
-
-    /**
-     * Reads data from the socket.
-     * @private
-     */
-    readSocket(): Promise<string> {
         return new Promise((resolve, reject) => {
-            let data = '';
-            const onData = (chunk: string) => {
-                data += chunk;
-                if (data.includes("\n")) {
-                    this.socket.removeListener('data', onData);
-                    this.socket.removeListener('error', onError);
-                    resolve(data);
-                }
-            };
-            const onError = (err: Error) => {
-                this.socket.removeListener('data', onData);
-                this.socket.removeListener('error', onError);
-                reject(err);
-            };
+            socket.once('data', (responseJson: string) => {
+                this.releaseConnection(socket);
 
-            this.socket.on('data', onData);
-            this.socket.on('error', onError);
+                try {
+                    const response: RocksDBResponse = JSON.parse(responseJson);
+                    resolve(response);
+                } catch (error) {
+                    reject(new Error("Invalid response from server"));
+                }
+            });
+
+            socket.once('error', (err: Error) => {
+                this.releaseConnection(socket);
+                reject(err);
+            });
         });
     }
 

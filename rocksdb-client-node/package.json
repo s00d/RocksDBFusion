@@ -12,10 +12,15 @@
   "author": "s00d",
   "license": "MIT",
   "dependencies": {
-    "handlebars": "^4.7.8"
+    "handlebars": "^4.7.8",
+    "install": "^0.13.0",
+    "msgpack-lite": "^0.1.26",
+    "npm": "^10.8.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
+    "@types/msgpack-lite": "^0.1.11",
+    "tinybench": "^2.8.0",
     "ts-jest": "^29.1.5"
   }
 }

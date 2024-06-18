@@ -1,11 +1,11 @@
-#[cfg(not(target_os = "windows"))]
-use file_lock::{FileLock, FileOptions};
+use async_std::fs::OpenOptions;
+use async_std::io;
+use async_std::path::PathBuf;
+use async_std::sync::{Arc, Mutex};
+use async_std::task;
 use log::LevelFilter;
-#[cfg(not(target_os = "windows"))]
-use std::path::PathBuf;
 use std::str::FromStr;
-#[cfg(not(target_os = "windows"))]
-use tokio::io;
+use std::fs;
 
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
@@ -46,28 +46,44 @@ impl LogLevel {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
 pub struct LockFileGuard {
     path: PathBuf,
-    _file: FileLock,
+    _file: Arc<Mutex<async_std::fs::File>>,
 }
-#[cfg(not(target_os = "windows"))]
+
 impl LockFileGuard {
-    pub(crate) fn new(path: PathBuf) -> io::Result<Self> {
-        let options = FileOptions::new().write(true).create(true).append(false);
-        let lock = FileLock::lock(path.to_str().unwrap(), true, options)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-        Ok(Self { path, _file: lock })
+    pub(crate) async fn new(path: PathBuf) -> io::Result<Self> {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&path)
+            .await?;
+
+        let file = Arc::new(Mutex::new(file));
+
+        // Implement a simple file lock mechanism by holding the file open
+        {
+            let _locked_file = file.lock().await;
+        }
+
+        Ok(Self { path, _file: file })
     }
 }
-#[cfg(not(target_os = "windows"))]
+
 impl Drop for LockFileGuard {
     fn drop(&mut self) {
-        if let Err(e) = self._file.unlock() {
-            eprintln!("Failed to unlock file: {}", e);
-        }
-        if let Err(e) = std::fs::remove_file(&self.path) {
-            eprintln!("Failed to remove lock file: {}", e);
-        }
+        let path = self.path.clone();
+        task::block_on(async {
+            let _locked_file = self._file.lock().await;
+            // _locked_file will be dropped here
+            if let Err(e) = fs::remove_file(&path) {
+                eprintln!("Failed to remove lock file: {}", e);
+            }
+        });
     }
+}
+
+// Helper function to create lock guard
+pub async fn create_lock_guard(lock_file_path: PathBuf) -> Option<LockFileGuard> {
+    LockFileGuard::new(lock_file_path).await.ok()
 }

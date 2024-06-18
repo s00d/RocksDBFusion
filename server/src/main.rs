@@ -2,17 +2,18 @@ pub mod db_manager;
 mod helpers;
 pub mod server;
 
-#[cfg(not(target_os = "windows"))]
-use crate::helpers::LockFileGuard;
-use crate::helpers::LogLevel;
-use env_logger::{Builder, Target};
-use log::{info, LevelFilter};
-use server::RocksDBServer;
+use async_std::net::{TcpListener, TcpStream};
+use async_std::task;
+use async_std::io::{BufReader, BufWriter, prelude::*};
+use async_std::sync::Arc;
+use futures::stream::StreamExt;
+use futures::FutureExt;
+use log::{error, info};
 use std::env;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use tokio::io;
-use tokio::net::TcpListener;
+use crate::helpers::{LogLevel, create_lock_guard};
+use crate::server::{Request, RocksDBServer};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "RocksDB Server", about = "A simple RocksDB server.")]
@@ -32,7 +33,6 @@ struct Opt {
     #[structopt(long, env = "ROCKSDB_TOKEN", help = "Authentication token for server access")]
     token: Option<String>,
 
-    #[cfg(not(target_os = "windows"))]
     #[structopt(long, env = "ROCKSDB_LOCK_FILE", parse(from_os_str), help = "Path to the lock file")]
     lock_file: Option<PathBuf>,
 
@@ -40,8 +40,8 @@ struct Opt {
     log_level: LogLevel,
 }
 
-#[tokio::main]
-async fn main() -> io::Result<()> {
+#[async_std::main]
+async fn main() {
     let opt = Opt::from_args();
 
     let dbpath = if opt.dbpath.starts_with(".") {
@@ -56,45 +56,103 @@ async fn main() -> io::Result<()> {
     let ttl = opt.ttl;
     let token = opt.token;
 
-    #[cfg(not(target_os = "windows"))]
-    let _lock_guard = if let Some(lock_file_path) = opt.lock_file {
-        Some(LockFileGuard::new(lock_file_path)?)
+    let lock_guard = if let Some(lock_file_path) = opt.lock_file {
+        Some(create_lock_guard(lock_file_path.into()).await.unwrap())
     } else {
         None
     };
 
-    let log_level: LevelFilter = opt.log_level.into();
+    let log_level: log::LevelFilter = opt.log_level.into();
 
-    Builder::new()
+    env_logger::Builder::new()
         .filter(None, log_level)
-        .target(Target::Stdout)
+        .target(env_logger::Target::Stdout)
         .init();
 
     let addr = format!("{}:{}", host, port);
+    let listener = TcpListener::bind(&addr).await.unwrap();
+    let server = Arc::new(RocksDBServer::new(dbpath, ttl, token).unwrap());
 
-    let server = RocksDBServer::new(dbpath.clone(), ttl, token).map_err(|e| {
-        log::error!("Failed to create RocksDBServer: {}", e);
-        io::Error::new(io::ErrorKind::Other, "Failed to create RocksDBServer")
-    })?;
-
-    let listener = TcpListener::bind(&addr).await.map_err(|e| {
-        log::error!("Failed to bind to address {}: {}", addr, e);
-        io::Error::new(io::ErrorKind::AddrInUse, "Failed to bind to address")
-    })?;
     info!("Server listening on {}", addr);
 
-    tokio::spawn(async move {
-        while let Ok((socket, _)) = listener.accept().await {
-            let server = server.clone();
-            tokio::spawn(async move {
-                server.handle_client(socket).await;
-            });
-        }
+    let server_task = task::spawn(async move {
+        listener
+            .incoming()
+            .for_each_concurrent(/* limit */ None, |stream| {
+                let server = server.clone();
+                async move {
+                    match stream {
+                        Ok(stream) => {
+                            task::spawn(handle_connection(stream, server));
+                        }
+                        Err(e) => {
+                            error!("Failed to accept connection: {}", e);
+                        }
+                    }
+                }
+            })
+            .await;
     });
 
-    // Wait for shutdown signal
-    tokio::signal::ctrl_c().await?;
-    info!("Shutdown signal received, terminating...");
+    let (signal_sender, signal_receiver) = async_std::channel::bounded(1);
+    ctrlc::set_handler(move || {
+        let _ = signal_sender.try_send(());
+    }).expect("Error setting Ctrl-C handler");
+
+    let signal_task = task::spawn(async move {
+        let _ = signal_receiver.recv().await;
+        info!("Ctrl+C received, shutting down");
+    });
+
+    futures::select! {
+        _ = server_task.fuse() => (),
+        _ = signal_task.fuse() => (),
+    }
+
+    drop(lock_guard);
+
+    info!("Server has shut down gracefully");
+}
+
+async fn handle_connection(socket: TcpStream, server: Arc<RocksDBServer>) -> async_std::io::Result<()> {
+    let reader = BufReader::new(&socket);
+    let mut writer = BufWriter::new(&socket);
+    let mut lines = reader.lines();
+
+    while let Some(line) = lines.next().await {
+        match line {
+            Ok(buffer) => {
+                let request: Request = match serde_json::from_str(&buffer) {
+                    Ok(req) => req,
+                    Err(e) => {
+                        error!("Failed to parse request: {}", e);
+                        continue;
+                    }
+                };
+
+                let server = server.clone();
+                let response = server.handle_request(request).await;
+                let response_data = serde_json::to_vec(&response).unwrap();
+
+                if let Err(e) = writer.write_all(&response_data).await {
+                    error!("Failed to write to socket: {}", e);
+                    break;
+                }
+                if let Err(e) = writer.write_all(b"\n").await {
+                    error!("Failed to write to socket: {}", e);
+                    break;
+                }
+                if let Err(e) = writer.flush().await {
+                    error!("Failed to flush socket: {}", e);
+                    break;
+                }
+            }
+            Err(e) => {
+                error!("Failed to read from socket: {}", e);
+                return Err(e);
+            }
+        }
+    }
 
     Ok(())
 }

@@ -1,10 +1,10 @@
 use crate::db_manager::RocksDBManager;
-use log::{debug, error, info};
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use async_std::task::{sleep, spawn};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -54,48 +54,8 @@ impl RocksDBServer {
         })
     }
 
-    pub async fn handle_client(&self, mut socket: tokio::net::TcpStream) {
-        let mut buffer = Vec::new();
 
-        loop {
-            match socket.read_buf(&mut buffer).await {
-                Ok(0) => {
-                    info!("Connection closed");
-                    break;
-                }
-                Ok(_) => {
-                    if let Some(position) = buffer.iter().position(|&b| b == b'\n') {
-                        let request_data = buffer[..position].to_vec(); // Copy data up to position
-                        buffer = buffer.split_off(position + 1); // Leave only the remaining part of the buffer
-
-                        match serde_json::from_slice::<Request>(&request_data) {
-                            Ok(request) => {
-                                debug!("Received request: {:?}", request);
-                                let response = self.handle_request(request).await;
-                                let mut response_bytes = serde_json::to_vec(&response).unwrap();
-                                response_bytes.push(b'\n'); // Add '\n' to the end of the response
-
-                                if let Err(e) = socket.write_all(&response_bytes).await {
-                                    error!("Failed to send response: {}", e);
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                error!("Failed to deserialize request: {}", e);
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("Error reading from socket: {}", e);
-                    break;
-                }
-            }
-        }
-    }
-
-    async fn handle_request(&self, req: Request) -> Response {
+    pub(crate) async fn handle_request(&self, req: Request) -> Response {
         if !self.is_authorized(&req) {
             error!("Unauthorized request: {:?}", req);
             return Response {
@@ -105,7 +65,7 @@ impl RocksDBServer {
             };
         }
         debug!("Handling request action: {}", req.action);
-        match req.action.as_str() {
+        let result = match req.action.as_str() {
             "put" => self.handle_put(req).await,
             "get" => self.handle_get(req).await,
             "delete" => self.handle_delete(req).await,
@@ -147,7 +107,11 @@ impl RocksDBServer {
                 result: None,
                 error: Some("Unknown action".to_string()),
             },
-        }
+        };
+
+        debug!("result: {:?}", result);
+
+        result
     }
 
     fn is_authorized(&self, req: &Request) -> bool {
@@ -1175,8 +1139,8 @@ impl RocksDBServer {
             Ok(_) => {
                 // Schedule a commit after 10 seconds
                 let db_manager = self.db_manager.clone();
-                tokio::spawn(async move {
-                    tokio::time::sleep(Duration::from_secs(10)).await;
+                spawn(async move {
+                    sleep(Duration::from_secs(10)).await;
                     if let Err(e) = db_manager.commit_transaction() {
                         error!("Failed to commit transaction after timeout: {}", e);
                     }

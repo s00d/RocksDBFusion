@@ -1,3 +1,5 @@
+import { createConnection } from "net";
+
 interface RocksDBResponse {
     success: boolean;
     result?: string;
@@ -11,6 +13,7 @@ class RocksDBClient {
     socket: any;
     timeout: number;
     retryInterval: number;
+    private pool: any[];
 
     /**
      * Constructor to initialize the RocksDB client.
@@ -28,113 +31,66 @@ class RocksDBClient {
         this.timeout = timeout;
         this.retryInterval = retryInterval;
         this.socket = null;
+
+        this.pool = [];
     }
 
     /**
-     * Connects to the RocksDB server with retry mechanism.
-     *
-     * @throws {Error} If unable to connect to the server.
-     */
-    async connect(): Promise<void> {
-        const startTime = Date.now();
-
-        while (true) {
-            try {
-                this.socket = await this.createSocket(this.host, this.port);
-                return; // Connection successful
-            } catch (error: any) {
-                if ((Date.now() - startTime) >= this.timeout * 1000) {
-                    throw new Error(`Unable to connect to server: ${error.message}`);
-                }
-                await this.sleep(this.retryInterval * 1000);
-            }
-        }
-    }
-    
-    /**
-     * Closes the socket connection.
+     * Closes all connections in the pool.
      */
     close(): void {
-        if (this.socket) {
-            this.socket.end();
-            this.socket = null;
+        for (const socket of this.pool) {
+            socket.end();
         }
+        this.pool = [];
     }
 
-    /**
-     * Creates a socket connection.
-     * @private
-     */
-    createSocket(host: string, port: number): Promise<any> {
+    private async createSocket(host: string, port: number): Promise<any> {
         return new Promise((resolve, reject) => {
-            const socket = require('net').createConnection({ host, port }, () => {
-                socket.setMaxListeners(20);
+            const socket = createConnection({ host, port }, () => {
+                socket.setMaxListeners(3000);
                 resolve(socket);
             });
             socket.on('error', reject);
         });
     }
 
-    /**
-     * Sleeps for the given number of milliseconds.
-     * @private
-     */
-    sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    private async getConnection(): Promise<any> {
+        if (this.pool.length > 0) {
+            return this.pool.pop();
+        }
+        return this.createSocket(this.host, this.port);
     }
 
-    /**
-     * Sends a request to the RocksDB server.
-     *
-     * @param {object} request The request to be sent.
-     * @return {Promise<object>} The response from the server.
-     * @throws {Error} If the response from the server is invalid.
-     */
-    async sendRequest(request: object): Promise<RocksDBResponse> {
-        if (!this.socket) {
-            await this.connect();
-        }
+    private releaseConnection(socket: any) {
+        this.pool.push(socket);
+    }
 
+    async sendRequest(request: object): Promise<RocksDBResponse> {
         if (this.token !== null) {
-            (request as any).token = this.token; // Add token to request if present
+            (request as any).token = this.token;
         }
 
         const requestJson = JSON.stringify(request) + "\n";
-        this.socket.write(requestJson);
+        const socket = await this.getConnection();
+        socket.write(requestJson);
 
-        const responseJson = await this.readSocket();
-        const response = JSON.parse(responseJson);
-
-        if (response === null) {
-            throw new Error("Invalid response from server");
-        }
-
-        return response;
-    }
-
-    /**
-     * Reads data from the socket.
-     * @private
-     */
-    readSocket(): Promise<string> {
         return new Promise((resolve, reject) => {
-            let data = '';
-            const onData = (chunk: string) => {
-                data += chunk;
-                if (data.includes("\n")) {
-                    this.socket.removeListener('data', onData);
-                    this.socket.removeListener('error', onError);
-                    resolve(data);
-                }
-            };
-            const onError = (err: Error) => {
-                this.socket.removeListener('data', onData);
-                this.socket.removeListener('error', onError);
-                reject(err);
-            };
+            socket.once('data', (responseJson: string) => {
+                this.releaseConnection(socket);
 
-            this.socket.on('data', onData);
-            this.socket.on('error', onError);
+                try {
+                    const response: RocksDBResponse = JSON.parse(responseJson);
+                    resolve(response);
+                } catch (error) {
+                    reject(new Error("Invalid response from server"));
+                }
+            });
+
+            socket.once('error', (err: Error) => {
+                this.releaseConnection(socket);
+                reject(err);
+            });
         });
     }
 
@@ -162,7 +118,7 @@ class RocksDBClient {
      * @param {string} value The value to put
      * @param {string} cf_name The column family name
      * @param {boolean} txn The transaction ID
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -195,7 +151,7 @@ class RocksDBClient {
      * @param {string} cf_name The column family name
      * @param {string} default_value The default value
      * @param {boolean} txn The transaction ID
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -229,7 +185,7 @@ class RocksDBClient {
      * @param {string} key The key to delete
      * @param {string} cf_name The column family name
      * @param {boolean} txn The transaction ID
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -261,7 +217,7 @@ class RocksDBClient {
      * @param {string} value The value to merge
      * @param {string} cf_name The column family name
      * @param {boolean} txn The transaction ID
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -292,7 +248,7 @@ class RocksDBClient {
      *
      * @param {string} value The property to get
      * @param {string} cf_name The column family name
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -320,7 +276,7 @@ class RocksDBClient {
      * @param {string} start The start index
      * @param {string} limit The limit of keys to retrieve
      * @param {string} query The query string to filter keys
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -347,7 +303,7 @@ class RocksDBClient {
      * The function can specify a query string to filter keys.
      *
      * @param {string} query The query string to filter keys
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -371,7 +327,7 @@ class RocksDBClient {
      * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
      * The function requires the path to the database.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -393,7 +349,7 @@ class RocksDBClient {
      * The function requires the name of the column family to create.
      *
      * @param {string} cf_name The column family name to create
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -416,7 +372,7 @@ class RocksDBClient {
      * The function requires the name of the column family to drop.
      *
      * @param {string} cf_name The column family name to drop
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -441,7 +397,7 @@ class RocksDBClient {
      * @param {string} start The start key
      * @param {string} end The end key
      * @param {string} cf_name The column family name
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -474,7 +430,7 @@ class RocksDBClient {
      * @param {string} key The key to put
      * @param {string} value The value to put
      * @param {string} cf_name The column family name
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -503,7 +459,7 @@ class RocksDBClient {
      * @param {string} key The key to merge
      * @param {string} value The value to merge
      * @param {string} cf_name The column family name
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -531,7 +487,7 @@ class RocksDBClient {
      *
      * @param {string} key The key to delete
      * @param {string} cf_name The column family name
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -555,7 +511,7 @@ class RocksDBClient {
      * Writes the current write batch to the database.
      * This function handles the `write_batch_write` action which writes the current write batch to the RocksDB database.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -575,7 +531,7 @@ class RocksDBClient {
      * Clears the current write batch.
      * This function handles the `write_batch_clear` action which clears the current write batch.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -595,7 +551,7 @@ class RocksDBClient {
      * Destroys the current write batch.
      * This function handles the `write_batch_destroy` action which destroys the current write batch.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -615,7 +571,7 @@ class RocksDBClient {
      * Creates a new iterator for the database.
      * This function handles the `create_iterator` action which creates a new iterator for iterating over the keys in the RocksDB database.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -637,7 +593,7 @@ class RocksDBClient {
      * The function requires the ID of the iterator to destroy.
      *
      * @param {string} iterator_id The iterator ID
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -661,7 +617,7 @@ class RocksDBClient {
      *
      * @param {string} iterator_id The iterator ID
      * @param {string} key The key to seek
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -685,7 +641,7 @@ class RocksDBClient {
      * The function requires the ID of the iterator.
      *
      * @param {string} iterator_id The iterator ID
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -708,7 +664,7 @@ class RocksDBClient {
      * The function requires the ID of the iterator.
      *
      * @param {string} iterator_id The iterator ID
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -729,7 +685,7 @@ class RocksDBClient {
      * Creates a backup of the database.
      * This function handles the `backup` action which creates a backup of the RocksDB database.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -749,7 +705,7 @@ class RocksDBClient {
      * Restores the database from the latest backup.
      * This function handles the `restore_latest` action which restores the RocksDB database from the latest backup.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -771,7 +727,7 @@ class RocksDBClient {
      * The function requires the ID of the backup to restore.
      *
      * @param {string} backup_id The ID of the backup to restore
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -792,7 +748,7 @@ class RocksDBClient {
      * Retrieves information about all backups.
      * This function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -812,7 +768,7 @@ class RocksDBClient {
      * Begins a new transaction.
      * This function handles the `begin_transaction` action which begins a new transaction in the RocksDB database.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -833,7 +789,7 @@ class RocksDBClient {
      * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to commit.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
@@ -854,7 +810,7 @@ class RocksDBClient {
      * This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
      * The function requires the ID of the transaction to roll back.
      *
-     * 
+     *
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
