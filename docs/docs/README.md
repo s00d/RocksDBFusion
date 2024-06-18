@@ -36,7 +36,16 @@ This project is perfect for anyone looking to manage RocksDB efficiently across 
 
 ```mermaid
 graph LR
-    A[Client] -->|TCP Connection| B[Server]
-    B -->|Data Exchange| C[RocksDB]
-    D[viewer] -->|TCP Connection| B
+    A[Client] <-->|TCP Connection| B[Server]
+    B <-->|Data Exchange| C[RocksDB]
+    D[Viewer] <-->|TCP Connection| B
 ```
+
+
+### Performance Table
+
+| Task Name | ops/sec | Average Time (ns) | Margin   | Samples |
+|-----------|---------|-------------------|----------|---------|
+| 'put'     | 15,151  | 66,001.68         | ±1.14%   | 15,152  |
+| 'get'     | 18,665  | 53,574.02         | ±0.71%   | 18,666  |
+| 'delete'  | 15,040  | 66,488.36         | ±1.04%   | 15,041  |
