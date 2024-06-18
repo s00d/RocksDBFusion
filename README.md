@@ -1,3 +1,5 @@
+![Logo](https://raw.githubusercontent.com/s00d/RocksDBFusion/main/assets/github-min.webp)
+
 # RocksDBFusion
 
 RocksDBFusion is a comprehensive project that includes a server for RocksDB, multiple clients for different languages, and a client with an interface for interacting with the server. This project aims to provide a unified and efficient way to manage and interact with RocksDB across different platforms and languages.
