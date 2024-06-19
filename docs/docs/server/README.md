@@ -26,3 +26,5 @@ This project provides a simple server implementation for RocksDB, a persistent k
 - **Logging**: Configurable logging levels.
 - **Authentication**: Optional token-based authentication for server access.
 - **Custom Merge Operator**: A JSON merge operator to handle JSON merge operations.
+- **Cache Layer**: Optional in-memory caching to improve read performance with configurable time-to-live (TTL).
+

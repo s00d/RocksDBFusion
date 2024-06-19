@@ -30,12 +30,22 @@ export default defineUserConfig({
         icon: "fas fa-home",
       },
       {
-        text: "Server",
-        link: "/server/",
+        text: "Server Info",
         icon: "fas fa-server",
+        path: "/server/",
+        prefix: "/server/",
+        collapsible: true,
+        // defaults to false
+        expanded: true,
+        children: [
+          "README.md",
+          "install.md",
+          "methods.md",
+          "structure.md",
+        ],
       },
       {
-        text: "Clients",
+        text: "Clients  Info",
         icon: "fas fa-code",
         path: "/clients/",
         prefix: "/clients/",
@@ -62,7 +72,7 @@ export default defineUserConfig({
         icon: "fas fa-history",
       },
       {
-        text: "Develop",
+        text: "Development",
         path: "/develop/",
         icon: "fas fa-tools",
         prefix: "/develop/",

@@ -188,7 +188,8 @@ rocksdb_server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
 - `--token <TOKEN>`: Authentication token for server access
 - `--log-level <LEVEL>`: Logging level (debug, info, warn, error)
 - `--lock-file <FILE>`: Path to the lock file
-
+- `--cache`: Enable cache layer (default: `false`).
+- `--cache-ttl`: Cache time-to-live in seconds (default: `1800`).
 
 
 ### Logging

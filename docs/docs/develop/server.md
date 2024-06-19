@@ -20,6 +20,7 @@ The RocksDB Server is a lightweight server implementation that provides a remote
 - **Logging**: Configurable logging levels for monitoring and debugging.
 - **Authentication**: Optional token-based authentication for secure access.
 - **Custom Merge Operator**: Implement a JSON merge operator to handle JSON merge operations.
+- **Cache Layer**: Optional in-memory caching to improve read performance with configurable time-to-live (TTL).
 
 ## Dependencies
 
@@ -111,6 +112,15 @@ The `server` module contains the core logic for handling requests and interactin
 ### DB Manager
 
 The `db_manager` module provides functions for performing database operations, managing transactions, and handling backups.
+
+### Cache Module
+
+The `cache` module provides in-memory caching capabilities to improve read performance and reduce the load on RocksDB. It includes logic for managing cache entries, performing cleanup, and synchronizing with the database.
+
+### Task Queue Module
+
+The `queue` module implements a task queue for handling asynchronous write operations to RocksDB. This ensures that write operations are performed in a non-blocking manner, improving the overall performance of the server.
+
 
 ## Request and Response
 
