@@ -1,11 +1,11 @@
+use crate::cache::CacheLayer;
 use crate::db_manager::RocksDBManager;
+use async_std::task::{sleep, spawn};
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use async_std::task::{sleep, spawn};
-use crate::cache::CacheLayer;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -65,7 +65,6 @@ impl RocksDBServer {
         })
     }
 
-
     pub(crate) async fn handle_request(&self, req: Request) -> Response {
         if !self.is_authorized(&req) {
             error!("Unauthorized request: {:?}", req);
@@ -75,6 +74,7 @@ impl RocksDBServer {
                 error: Some("Unauthorized".to_string()),
             };
         }
+
         debug!("Handling request action: {}", req.action);
         let result = match req.action.as_str() {
             "put" => self.handle_put(req).await,
@@ -113,16 +113,23 @@ impl RocksDBServer {
             "begin_transaction" => self.handle_begin_transaction().await,
             "commit_transaction" => self.handle_commit_transaction().await,
             "rollback_transaction" => self.handle_rollback_transaction().await,
-            _ => Response {
-                success: false,
-                result: None,
-                error: Some("Unknown action".to_string()),
-            },
+            _ => Err("Unknown action".to_string()),
         };
 
         debug!("result: {:?}", result);
 
-        result
+        match result {
+            Ok(response) => Response {
+                success: true,
+                result: response,
+                error: None,
+            },
+            Err(e) => Response {
+                success: false,
+                result: None,
+                error: Some(e),
+            },
+        }
     }
 
     fn is_authorized(&self, req: &Request) -> bool {
@@ -151,37 +158,29 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_put(&self, req: Request) -> Response {
-        debug!("handle_put with key: {:?}, value: {:?}", req.key, req.value);
-        match (req.key.clone(), req.value.clone()) {
-            (Some(key), Some(value)) => {
-                self.cache_layer.put(key.clone(), value.clone(), req.cf_name.clone()).await;
-                if !self.cache_layer.enabled {
-                    match self.db_manager.put(key, value, req.cf_name, req.txn) {
-                        Ok(_) => Response {
-                            success: true,
-                            result: None,
-                            error: None,
-                        },
-                        Err(e) => Response {
-                            success: false,
-                            result: None,
-                            error: Some(e),
-                        },
-                    }
-                } else {
-                    Response {
-                        success: true,
-                        result: None,
-                        error: None,
-                    }
-                }
+    pub(crate) async fn handle_put(&self, req: Request) -> Result<Option<String>, String> {
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
+        let value = req
+            .value
+            .clone()
+            .ok_or_else(|| "Value must be provided".to_string())?;
+
+        // Добавление в кеш-слой
+        self.cache_layer
+            .put(key.clone(), value.clone(), req.cf_name.clone())
+            .await;
+
+        // Если кеш-слой выключен, то добавляем в базу данных
+        if !self.cache_layer.enabled {
+            match self.db_manager.put(key, value, req.cf_name, req.txn) {
+                Ok(_) => Ok(None),
+                Err(e) => Err(format!("Failed to put data: {}", e)),
             }
-            _ => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key or value".to_string()),
-            },
+        } else {
+            Ok(None)
         }
     }
 
@@ -204,44 +203,32 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_get(&self, req: Request) -> Response {
+    async fn handle_get(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_get with key: {:?}", req.key);
-        if let Some(ref key) = req.key {
-            if let Some(cached_value) = self.cache_layer.get(key, req.cf_name.clone()).await {
-                return Response {
-                    success: true,
-                    result: Some(cached_value),
-                    error: None,
-                };
-            }
+
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
+
+        if let Some(cached_value) = self.cache_layer.get(&key, req.cf_name.clone()).await {
+            return Ok(Some(cached_value));
         }
 
-        match req.key.clone() {
-            Some(key) => match self.db_manager.get(key.clone(), req.cf_name.clone(), req.default_value.clone(), req.txn) {
-                Ok(Some(value)) => {
-                    self.cache_layer.put(key, value.clone(), req.cf_name.clone()).await;
-                    Response {
-                        success: true,
-                        result: Some(value),
-                        error: None,
-                    }
-                }
-                Ok(None) => Response {
-                    success: false,
-                    result: None,
-                    error: Some("Key not found".to_string()),
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            None => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key".to_string()),
-            },
+        match self.db_manager.get(
+            key.clone(),
+            req.cf_name.clone(),
+            req.default_value.clone(),
+            req.txn,
+        ) {
+            Ok(Some(value)) => {
+                self.cache_layer
+                    .put(key, value.clone(), req.cf_name.clone())
+                    .await;
+                Ok(Some(value))
+            }
+            Ok(None) => Err("Key not found".to_string()),
+            Err(e) => Err(e),
         }
     }
 
@@ -263,29 +250,20 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_delete(&self, req: Request) -> Response {
+    async fn handle_delete(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_delete with key: {:?}", req.key);
-        if let Some(ref key) = req.key {
-            self.cache_layer.delete(key.clone(), req.cf_name.clone()).await;
-        }
-        match req.key {
-            Some(key) => match self.db_manager.delete(key, req.cf_name, req.txn) {
-                Ok(_) => Response {
-                    success: true,
-                    result: None,
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            None => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key".to_string()),
-            },
+
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
+        self.cache_layer
+            .delete(key.clone(), req.cf_name.clone())
+            .await;
+
+        match self.db_manager.delete(key, req.cf_name, req.txn) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -308,31 +286,28 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_merge(&self, req: Request) -> Response {
+    async fn handle_merge(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_merge with key: {:?}, value: {:?}",
             req.key, req.value
         );
-        match (req.key, req.value) {
-            (Some(key), Some(value)) => {
-                match self.db_manager.merge(key, value, req.cf_name, req.txn) {
-                    Ok(_) => Response {
-                        success: true,
-                        result: None,
-                        error: None,
-                    },
-                    Err(e) => Response {
-                        success: false,
-                        result: None,
-                        error: Some(e),
-                    },
-                }
-            }
-            _ => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key or value".to_string()),
-            },
+
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
+        let value = req
+            .value
+            .clone()
+            .ok_or_else(|| "Value must be provided".to_string())?;
+
+        self.cache_layer
+            .clear(key.clone(), req.cf_name.clone())
+            .await;
+
+        match self.db_manager.merge(key, value, req.cf_name, req.txn) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -353,26 +328,17 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_get_property(&self, req: Request) -> Response {
+    async fn handle_get_property(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_get_property with property: {:?}", req.value);
-        match req.value {
-            Some(value) => match self.db_manager.get_property(value, req.cf_name) {
-                Ok(_) => Response {
-                    success: true,
-                    result: None,
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            _ => Response {
-                success: false,
-                result: None,
-                error: Some("Missing property".to_string()),
-            },
+
+        let value = req
+            .value
+            .clone()
+            .ok_or_else(|| "Value must be provided".to_string())?;
+
+        match self.db_manager.get_property(value, req.cf_name) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -394,7 +360,7 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_get_keys(&self, req: Request) -> Response {
+    async fn handle_get_keys(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_get_keys with options: {:?}", req.options);
         let start = req.parse_option::<usize>("start").unwrap_or(0);
         let limit = req.parse_option::<usize>("limit").unwrap_or(20);
@@ -407,17 +373,9 @@ impl RocksDBServer {
             .get_keys(start, limit, query)
             .map(|keys| {
                 let result = serde_json::to_string(&keys).unwrap();
-                Response {
-                    success: true,
-                    result: Some(result),
-                    error: None,
-                }
+                Ok(Some(result))
             })
-            .unwrap_or_else(|e| Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            })
+            .unwrap_or_else(|e| Err(e))
     }
 
     /**
@@ -436,7 +394,7 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_get_all(&self, req: Request) -> Response {
+    async fn handle_get_all(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_get_all with options: {:?}", req.options);
         let query = req
             .options
@@ -447,17 +405,9 @@ impl RocksDBServer {
             .get_all(query)
             .map(|keys| {
                 let result = serde_json::to_string(&keys).unwrap();
-                Response {
-                    success: true,
-                    result: Some(result),
-                    error: None,
-                }
+                Ok(Some(result))
             })
-            .unwrap_or_else(|e| Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            })
+            .unwrap_or_else(|e| Err(e))
     }
 
     /**
@@ -473,19 +423,11 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_list_column_families(&self) -> Response {
+    async fn handle_list_column_families(&self) -> Result<Option<String>, String> {
         debug!("handle_list_column_families with value");
         match self.db_manager.list_column_families() {
-            Ok(cfs) => Response {
-                success: true,
-                result: Some(serde_json::to_string(&cfs).unwrap()),
-                error: None,
-            },
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e.to_string()),
-            }
+            Ok(cfs) => Ok(Some(serde_json::to_string(&cfs).unwrap())),
+            Err(e) => Err(e),
         }
     }
 
@@ -505,29 +447,20 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_create_column_family(&self, req: Request) -> Response {
+    async fn handle_create_column_family(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_create_column_family with cf_name: {:?}",
             req.cf_name
         );
-        match req.cf_name {
-            Some(cf_name) => match self.db_manager.create_column_family(cf_name) {
-                Ok(_) => Response {
-                    success: true,
-                    result: None,
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            None => Response {
-                success: false,
-                result: None,
-                error: Some("Missing column family name".to_string()),
-            },
+
+        let cf_name = req
+            .cf_name
+            .clone()
+            .ok_or_else(|| "Missing column family name".to_string())?;
+
+        match self.db_manager.create_column_family(cf_name) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -547,26 +480,17 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_drop_column_family(&self, req: Request) -> Response {
+    async fn handle_drop_column_family(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_drop_column_family with cf_name: {:?}", req.cf_name);
-        match req.cf_name {
-            Some(cf_name) => match self.db_manager.drop_column_family(cf_name) {
-                Ok(_) => Response {
-                    success: true,
-                    result: None,
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            None => Response {
-                success: false,
-                result: None,
-                error: Some("Missing column family name".to_string()),
-            },
+
+        let cf_name = req
+            .cf_name
+            .clone()
+            .ok_or_else(|| "Missing column family name".to_string())?;
+
+        match self.db_manager.drop_column_family(cf_name) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -588,7 +512,7 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_compact_range(&self, req: Request) -> Response {
+    async fn handle_compact_range(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_compact_range with options: {:?}", req.options);
         let start = req
             .parse_option::<String>("start")
@@ -598,16 +522,8 @@ impl RocksDBServer {
             .db_manager
             .compact_range(Some(start), Some(end), req.cf_name)
         {
-            Ok(_) => Response {
-                success: true,
-                result: None,
-                error: None,
-            },
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -629,31 +545,24 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_write_batch_put(&self, req: Request) -> Response {
+    async fn handle_write_batch_put(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_write_batch_put with key: {:?}, value: {:?}",
             req.key, req.value
         );
-        match (req.key, req.value) {
-            (Some(key), Some(value)) => {
-                match self.db_manager.write_batch_put(key, value, req.cf_name) {
-                    Ok(_) => Response {
-                        success: true,
-                        result: None,
-                        error: None,
-                    },
-                    Err(e) => Response {
-                        success: false,
-                        result: None,
-                        error: Some(e),
-                    },
-                }
-            }
-            _ => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key or value".to_string()),
-            },
+
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
+        let value = req
+            .value
+            .clone()
+            .ok_or_else(|| "Value must be provided".to_string())?;
+
+        match self.db_manager.write_batch_put(key, value, req.cf_name) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -675,31 +584,24 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_write_batch_merge(&self, req: Request) -> Response {
+    async fn handle_write_batch_merge(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_write_batch_merge with key: {:?}, value: {:?}",
             req.key, req.value
         );
-        match (req.key, req.value) {
-            (Some(key), Some(value)) => {
-                match self.db_manager.write_batch_merge(key, value, req.cf_name) {
-                    Ok(_) => Response {
-                        success: true,
-                        result: None,
-                        error: None,
-                    },
-                    Err(e) => Response {
-                        success: false,
-                        result: None,
-                        error: Some(e),
-                    },
-                }
-            }
-            _ => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key or value".to_string()),
-            },
+
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
+        let value = req
+            .value
+            .clone()
+            .ok_or_else(|| "Value must be provided".to_string())?;
+
+        match self.db_manager.write_batch_merge(key, value, req.cf_name) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -720,26 +622,17 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_write_batch_delete(&self, req: Request) -> Response {
+    async fn handle_write_batch_delete(&self, req: Request) -> Result<Option<String>, String> {
         debug!("handle_write_batch_delete with key: {:?}", req.key);
-        match req.key {
-            Some(key) => match self.db_manager.write_batch_delete(key, req.cf_name) {
-                Ok(_) => Response {
-                    success: true,
-                    result: None,
-                    error: None,
-                },
-                Err(e) => Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                },
-            },
-            None => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key".to_string()),
-            },
+
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
+
+        match self.db_manager.write_batch_delete(key, req.cf_name) {
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -758,19 +651,11 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_write_batch_write(&self) -> Response {
+    async fn handle_write_batch_write(&self) -> Result<Option<String>, String> {
         debug!("handle_write_batch_write");
         match self.db_manager.write_batch_write() {
-            Ok(_) => Response {
-                success: true,
-                result: None,
-                error: None,
-            },
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -789,19 +674,11 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_write_batch_clear(&self) -> Response {
+    async fn handle_write_batch_clear(&self) -> Result<Option<String>, String> {
         debug!("handle_write_batch_clear");
         match self.db_manager.write_batch_clear() {
-            Ok(_) => Response {
-                success: true,
-                result: None,
-                error: None,
-            },
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -820,19 +697,11 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_write_batch_destroy(&self) -> Response {
+    async fn handle_write_batch_destroy(&self) -> Result<Option<String>, String> {
         debug!("handle_write_batch_destroy");
         match self.db_manager.write_batch_destroy() {
-            Ok(_) => Response {
-                success: true,
-                result: None,
-                error: None,
-            },
-            Err(_) => Response {
-                success: false,
-                result: None,
-                error: Some("WriteBatch not initialized".to_string()),
-            },
+            Ok(_) => Ok(None),
+            Err(_) => Err("WriteBatch not initialized".to_string()),
         }
     }
 
@@ -851,13 +720,12 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_create_iterator(&self) -> Response {
+    async fn handle_create_iterator(&self) -> Result<Option<String>, String> {
         debug!("handle_create_iterator");
-        Response {
-            success: true,
-            result: Some(self.db_manager.create_iterator().to_string()),
-            error: None,
-        }
+        self.db_manager
+            .create_iterator()
+            .map(|id| Ok(Some(id.to_string())))
+            .unwrap_or_else(|e| Err(e))
     }
 
     /**
@@ -876,7 +744,7 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_destroy_iterator(&self, req: Request) -> Response {
+    async fn handle_destroy_iterator(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_destroy_iterator with iterator_id: {:?}",
             req.parse_option::<usize>("iterator_id")
@@ -884,16 +752,8 @@ impl RocksDBServer {
         let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
         self.db_manager
             .destroy_iterator(iterator_id)
-            .map(|_| Response {
-                success: true,
-                result: None,
-                error: None,
-            })
-            .unwrap_or_else(|e| Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            })
+            .map(|_| Ok(None))
+            .unwrap_or_else(|e| Err(e))
     }
 
     /**
@@ -917,33 +777,22 @@ impl RocksDBServer {
         &self,
         req: Request,
         direction: rust_rocksdb::Direction,
-    ) -> Response {
+    ) -> Result<Option<String>, String> {
         debug!(
             "handle_iterator_seek with iterator_id: {:?}, key: {:?}",
             req.parse_option::<usize>("iterator_id"),
             req.key
         );
+        let key = req
+            .key
+            .clone()
+            .ok_or_else(|| "Key must be provided".to_string())?;
         let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
-        match req.key {
-            Some(key) => self
-                .db_manager
-                .iterator_seek(iterator_id, key, direction)
-                .map(|result| Response {
-                    success: true,
-                    result: Some(result),
-                    error: None,
-                })
-                .unwrap_or_else(|e| Response {
-                    success: false,
-                    result: None,
-                    error: Some(e),
-                }),
-            None => Response {
-                success: false,
-                result: None,
-                error: Some("Missing key".to_string()),
-            },
-        }
+
+        self.db_manager
+            .iterator_seek(iterator_id, key, direction)
+            .map(|result| Ok(Some(result)))
+            .unwrap_or_else(|e| Err(e))
     }
 
     /**
@@ -962,7 +811,7 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_iterator_next(&self, req: Request) -> Response {
+    async fn handle_iterator_next(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_iterator_next with iterator_id: {:?}",
             req.parse_option::<usize>("iterator_id")
@@ -970,16 +819,8 @@ impl RocksDBServer {
         let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
         self.db_manager
             .iterator_next(iterator_id)
-            .map(|result| Response {
-                success: true,
-                result: Some(result),
-                error: None,
-            })
-            .unwrap_or_else(|e| Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            })
+            .map(|result| Ok(Some(result)))
+            .unwrap_or_else(|e| Err(e))
     }
 
     /**
@@ -998,7 +839,7 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_iterator_prev(&self, req: Request) -> Response {
+    async fn handle_iterator_prev(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_iterator_prev with iterator_id: {:?}",
             req.parse_option::<usize>("iterator_id")
@@ -1006,16 +847,8 @@ impl RocksDBServer {
         let iterator_id = req.parse_option::<usize>("iterator_id").unwrap_or(0);
         self.db_manager
             .iterator_prev(iterator_id)
-            .map(|result| Response {
-                success: true,
-                result: Some(result),
-                error: None,
-            })
-            .unwrap_or_else(|e| Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            })
+            .map(|result| Ok(Some(result)))
+            .unwrap_or_else(|e| Err(e))
     }
 
     /**
@@ -1033,19 +866,11 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_backup(&self) -> Response {
+    async fn handle_backup(&self) -> Result<Option<String>, String> {
         debug!("handle_backup");
         match self.db_manager.backup() {
-            Ok(_) => Response {
-                success: true,
-                result: Some("Backup created successfully".to_string()),
-                error: None,
-            },
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Ok(_) => Ok(Some("Backup created successfully".to_string())),
+            Err(e) => Err(e),
         }
     }
 
@@ -1064,19 +889,11 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_restore_latest(&self) -> Response {
+    async fn handle_restore_latest(&self) -> Result<Option<String>, String> {
         debug!("handle_restore_latest");
         match self.db_manager.restore_latest_backup() {
-            Ok(_) => Response {
-                success: true,
-                result: Some("Database restored from latest backup".to_string()),
-                error: None,
-            },
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Ok(_) => Ok(Some("Database restored from latest backup".to_string())),
+            Err(e) => Err(e),
         }
     }
 
@@ -1096,23 +913,15 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_restore_request(&self, req: Request) -> Response {
+    async fn handle_restore_request(&self, req: Request) -> Result<Option<String>, String> {
         debug!(
             "handle_restore_request with backup_id: {:?}",
             req.parse_option::<u32>("backup_id")
         );
         let backup_id = req.parse_option::<u32>("backup_id").unwrap_or(0);
         match self.db_manager.restore_backup(backup_id) {
-            Ok(_) => Response {
-                success: true,
-                result: Some(format!("Database restored from backup {}", backup_id)),
-                error: None,
-            },
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Ok(_) => Ok(Some(format!("Database restored from backup {}", backup_id))),
+            Err(e) => Err(e),
         }
     }
 
@@ -1131,22 +940,14 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_get_backup_info(&self) -> Response {
+    async fn handle_get_backup_info(&self) -> Result<Option<String>, String> {
         debug!("handle_get_backup_info");
         match self.db_manager.get_backup_info() {
             Ok(info) => {
                 let result = serde_json::to_string(&info).unwrap();
-                Response {
-                    success: true,
-                    result: Some(result),
-                    error: None,
-                }
+                Ok(Some(result))
             }
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Err(e) => Err(e),
         }
     }
 
@@ -1165,7 +966,7 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_begin_transaction(&self) -> Response {
+    async fn handle_begin_transaction(&self) -> Result<Option<String>, String> {
         debug!("handle_begin_transaction");
 
         match self.db_manager.begin_transaction() {
@@ -1179,17 +980,9 @@ impl RocksDBServer {
                     }
                 });
 
-                Response {
-                    success: true,
-                    result: Some("Transaction started".to_string()),
-                    error: None,
-                }
+                Ok(Some("Transaction started".to_string()))
             }
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Err(e) => Err(e),
         }
     }
 
@@ -1206,23 +999,15 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_commit_transaction(&self) -> Response {
+    async fn handle_commit_transaction(&self) -> Result<Option<String>, String> {
         debug!("handle_commit_transaction");
 
         match self.db_manager.commit_transaction() {
             Ok(info) => {
                 let result = serde_json::to_string(&info).unwrap();
-                Response {
-                    success: true,
-                    result: Some(result),
-                    error: None,
-                }
+                Ok(Some(result))
             }
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Err(e) => Err(e),
         }
     }
 
@@ -1239,23 +1024,15 @@ impl RocksDBServer {
      * - `result`: Option<String> - The result of the operation
      * - `error`: Option<String> - Any error that occurred
      */
-    async fn handle_rollback_transaction(&self,) -> Response {
+    async fn handle_rollback_transaction(&self) -> Result<Option<String>, String> {
         debug!("handle_rollback_transaction");
 
         match self.db_manager.rollback_transaction() {
             Ok(info) => {
                 let result = serde_json::to_string(&info).unwrap();
-                Response {
-                    success: true,
-                    result: Some(result),
-                    error: None,
-                }
+                Ok(Some(result))
             }
-            Err(e) => Response {
-                success: false,
-                result: None,
-                error: Some(e),
-            },
+            Err(e) => Err(e),
         }
     }
 }

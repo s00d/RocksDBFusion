@@ -27,3 +27,12 @@ Defines the `RocksDBServer` struct, which manages the server's state and handles
 ## `helpers.rs`
 
 Provides utility functions and types, such as logging levels and lock file management.
+
+
+## `cache.rs`
+
+The `cache` module provides in-memory caching capabilities to improve read performance and reduce the load on RocksDB. It includes logic for managing cache entries, performing cleanup, and synchronizing with the database.
+
+## `queue.rs`
+
+The `queue` module implements a task queue for handling asynchronous write operations to RocksDB. This ensures that write operations are performed in a non-blocking manner, improving the overall performance of the server.

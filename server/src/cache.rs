@@ -1,9 +1,9 @@
+use crate::db_manager::RocksDBManager;
+use crate::queue::{TaskQueue, TaskType};
 use async_std::sync::{Arc, RwLock};
 use async_std::task;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use crate::db_manager::RocksDBManager;
-use crate::queue::{TaskQueue, TaskType};
 
 type CacheData = Arc<RwLock<HashMap<(String, Option<String>), (String, Instant)>>>;
 
@@ -51,11 +51,10 @@ impl CacheLayer {
             return None;
         }
 
-        let data = self.data.read().await;
-        if let Some((value, timestamp)) = data.get(&(key.to_string(), cf_name)) {
-            if timestamp.elapsed() <= self.ttl {
-                return Some(value.clone());
-            }
+        let mut data = self.data.write().await;
+        if let Some((value, expires_at)) = data.get_mut(&(key.to_string(), cf_name)) {
+            *expires_at = Instant::now() + self.ttl;
+            return Some(value.clone());
         }
         None
     }
@@ -63,8 +62,11 @@ impl CacheLayer {
     pub(crate) async fn put(&self, key: String, value: String, cf_name: Option<String>) {
         if self.enabled {
             let mut data = self.data.write().await;
-            data.insert((key.clone(), cf_name.clone()), (value.clone(), Instant::now()));
-            self.task_queue.add_task(TaskType::Put, key, Some(value), cf_name).await;
+            let expires_at = Instant::now() + self.ttl;
+            data.insert((key.clone(), cf_name.clone()), (value.clone(), expires_at));
+            self.task_queue
+                .add_task(TaskType::Put, key, Some(value), cf_name)
+                .await;
         }
     }
 
@@ -72,14 +74,23 @@ impl CacheLayer {
         if self.enabled {
             let mut data = self.data.write().await;
             data.remove(&(key.clone(), cf_name.clone()));
-            self.task_queue.add_task(TaskType::Delete, key, None, cf_name).await;
+            self.task_queue
+                .add_task(TaskType::Delete, key, None, cf_name)
+                .await;
+        }
+    }
+
+    pub(crate) async fn clear(&self, key: String, cf_name: Option<String>) {
+        if self.enabled {
+            let mut data = self.data.write().await;
+            data.remove(&(key.clone(), cf_name.clone()));
         }
     }
 
     async fn cleanup(&self) {
         let mut data = self.data.write().await;
         let now = Instant::now();
-        data.retain(|_, (_, timestamp)| now.duration_since(*timestamp) <= self.ttl);
+        data.retain(|_, (_, expires_at)| *expires_at > now);
     }
 }
 

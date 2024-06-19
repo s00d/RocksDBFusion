@@ -4,8 +4,8 @@ use async_std::path::PathBuf;
 use async_std::sync::{Arc, Mutex};
 use async_std::task;
 use log::LevelFilter;
-use std::str::FromStr;
 use std::fs;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
