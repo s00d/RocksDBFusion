@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use async_std::task::{sleep, spawn};
+use crate::cache::CacheLayer;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Request {
@@ -38,6 +39,7 @@ pub struct Response {
 pub struct RocksDBServer {
     db_manager: Arc<RocksDBManager>,
     auth_token: Option<String>,
+    cache_layer: Arc<CacheLayer>,
 }
 
 impl RocksDBServer {
@@ -45,12 +47,21 @@ impl RocksDBServer {
         db_path: String,
         ttl_secs: Option<u64>,
         auth_token: Option<String>,
+        cache_ttl_secs: Option<u64>,
+        cache_enabled: bool,
     ) -> Result<Self, String> {
         let db_manager = Arc::new(RocksDBManager::new(&db_path, ttl_secs)?);
+
+        let cache_layer = CacheLayer::new(
+            Duration::from_secs(cache_ttl_secs.unwrap_or(1800)),
+            cache_enabled,
+            db_manager.clone(),
+        );
 
         Ok(RocksDBServer {
             db_manager,
             auth_token,
+            cache_layer: Arc::new(cache_layer),
         })
     }
 
@@ -142,19 +153,28 @@ impl RocksDBServer {
      */
     async fn handle_put(&self, req: Request) -> Response {
         debug!("handle_put with key: {:?}, value: {:?}", req.key, req.value);
-        match (req.key, req.value) {
+        match (req.key.clone(), req.value.clone()) {
             (Some(key), Some(value)) => {
-                match self.db_manager.put(key, value, req.cf_name, req.txn) {
-                    Ok(_) => Response {
+                self.cache_layer.put(key.clone(), value.clone(), req.cf_name.clone()).await;
+                if !self.cache_layer.enabled {
+                    match self.db_manager.put(key, value, req.cf_name, req.txn) {
+                        Ok(_) => Response {
+                            success: true,
+                            result: None,
+                            error: None,
+                        },
+                        Err(e) => Response {
+                            success: false,
+                            result: None,
+                            error: Some(e),
+                        },
+                    }
+                } else {
+                    Response {
                         success: true,
                         result: None,
                         error: None,
-                    },
-                    Err(e) => Response {
-                        success: false,
-                        result: None,
-                        error: Some(e),
-                    },
+                    }
                 }
             }
             _ => Response {
@@ -186,16 +206,26 @@ impl RocksDBServer {
      */
     async fn handle_get(&self, req: Request) -> Response {
         debug!("handle_get with key: {:?}", req.key);
-        match req.key {
-            Some(key) => match self
-                .db_manager
-                .get(key, req.cf_name, req.default_value, req.txn)
-            {
-                Ok(Some(value)) => Response {
+        if let Some(ref key) = req.key {
+            if let Some(cached_value) = self.cache_layer.get(key, req.cf_name.clone()).await {
+                return Response {
                     success: true,
-                    result: Some(value),
+                    result: Some(cached_value),
                     error: None,
-                },
+                };
+            }
+        }
+
+        match req.key.clone() {
+            Some(key) => match self.db_manager.get(key.clone(), req.cf_name.clone(), req.default_value.clone(), req.txn) {
+                Ok(Some(value)) => {
+                    self.cache_layer.put(key, value.clone(), req.cf_name.clone()).await;
+                    Response {
+                        success: true,
+                        result: Some(value),
+                        error: None,
+                    }
+                }
                 Ok(None) => Response {
                     success: false,
                     result: None,
@@ -235,6 +265,9 @@ impl RocksDBServer {
      */
     async fn handle_delete(&self, req: Request) -> Response {
         debug!("handle_delete with key: {:?}", req.key);
+        if let Some(ref key) = req.key {
+            self.cache_layer.delete(key.clone(), req.cf_name.clone()).await;
+        }
         match req.key {
             Some(key) => match self.db_manager.delete(key, req.cf_name, req.txn) {
                 Ok(_) => Response {

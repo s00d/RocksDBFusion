@@ -1,6 +1,8 @@
 pub mod db_manager;
 mod helpers;
 pub mod server;
+mod cache;
+mod queue;
 
 use async_std::net::{TcpListener, TcpStream};
 use async_std::task;
@@ -38,6 +40,12 @@ struct Opt {
 
     #[structopt(long, possible_values = &LogLevel::variants(), case_insensitive = true, env = "ROCKSDB_LOG_LEVEL", default_value = "info", help = "Logging level")]
     log_level: LogLevel,
+
+    #[structopt(long, env = "ROCKSDB_CACHE", help = "Enable cache layer")]
+    cache: bool,
+
+    #[structopt(long, env = "ROCKSDB_CACHE_TTL", default_value = "1800", help = "Cache time-to-live in seconds")]
+    cache_ttl: u64,
 }
 
 #[async_std::main]
@@ -55,6 +63,8 @@ async fn main() {
     let host = opt.host;
     let ttl = opt.ttl;
     let token = opt.token;
+    let cache = opt.cache;
+    let cache_ttl = opt.cache_ttl;
 
     let lock_guard = if let Some(lock_file_path) = opt.lock_file {
         Some(create_lock_guard(lock_file_path.into()).await.unwrap())
@@ -71,7 +81,7 @@ async fn main() {
 
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr).await.unwrap();
-    let server = Arc::new(RocksDBServer::new(dbpath, ttl, token).unwrap());
+    let server = Arc::new(RocksDBServer::new(dbpath, ttl, token, Some(cache_ttl), cache).unwrap());
 
     info!("Server listening on {}", addr);
 

@@ -35,11 +35,6 @@ export default defineUserConfig({
         icon: "fas fa-server",
       },
       {
-        text: "Viewer",
-        link: "/viewer",
-        icon: "fas fa-eye",
-      },
-      {
         text: "Clients",
         icon: "fas fa-code",
         path: "/clients/",
@@ -57,6 +52,16 @@ export default defineUserConfig({
         ],
       },
       {
+        text: "Viewer",
+        link: "/viewer",
+        icon: "fas fa-eye",
+      },
+      {
+        text: "Changelog",
+        link: "/changelog",
+        icon: "fas fa-history",
+      },
+      {
         text: "Develop",
         path: "/develop/",
         icon: "fas fa-tools",
@@ -69,10 +74,11 @@ export default defineUserConfig({
           "generator.md",
           "server.md",
         ],
-      }
+      },
     ],
 
     plugins: {
+      blog: true,
       mdEnhance: {
         // Enable figure
         figure: true,
