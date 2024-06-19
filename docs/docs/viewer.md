@@ -1,3 +1,9 @@
+---
+lang: en-US
+icon: fas fa-desktop
+order: 4
+---
+
 # Viewer
 
 A simple Tauri application to view and interact with a RocksDB database. This application allows you to open a RocksDB database, view the list of keys, and see the values associated with those keys. It also supports pagination and search functionality.

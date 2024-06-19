@@ -1,3 +1,10 @@
+---
+lang: en-US
+icon: fas fa-code
+category:
+   - CLIENTS
+---
+
 # PHP
 
 A PHP client for interacting with RocksDB server.

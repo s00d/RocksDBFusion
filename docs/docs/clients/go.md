@@ -1,3 +1,10 @@
+---
+lang: en-US
+icon: fas fa-terminal
+category:
+   - CLIENTS
+---
+
 # Go
 
 A Go client for interacting with the RocksDB server.

@@ -10,9 +10,10 @@ export default defineUserConfig({
 
   base: process.env.NODE_ENV === 'production' ? '/RocksDBFusion/' : '/',
 
-
   theme: hopeTheme({
     logo: '/app.png',
+
+    iconAssets: "fontawesome",
 
     // Assuming GitHub. Can also be a full url.
     repo: "s00d/RocksDBFusion",
@@ -22,17 +23,64 @@ export default defineUserConfig({
     // Whether to display repo link, default is `true`
     repoDisplay: true,
 
-    navbar: ['/', 'server/', 'viewer', 'php', 'node', 'rust', 'python', 'go'],
+    navbar: [
+      {
+        text: "Home",
+        link: "/",
+        icon: "fas fa-home",
+      },
+      {
+        text: "Server",
+        link: "/server/",
+        icon: "fas fa-server",
+      },
+      {
+        text: "Viewer",
+        link: "/viewer",
+        icon: "fas fa-eye",
+      },
+      {
+        text: "Clients",
+        icon: "fas fa-code",
+        path: "/clients/",
+        prefix: "/clients/",
+        collapsible: true,
+        // defaults to false
+        expanded: true,
+        children: [
+          "README.md",
+          "php.md",
+          "node.md",
+          "rust.md",
+          "python.md",
+          "go.md",
+        ],
+      },
+      {
+        text: "Develop",
+        path: "/develop/",
+        icon: "fas fa-tools",
+        prefix: "/develop/",
+        collapsible: true,
+        // defaults to false
+        expanded: true,
+        children: [
+          "README.md",
+          "generator.md",
+          "server.md",
+        ],
+      }
+    ],
 
     plugins: {
       mdEnhance: {
-          // Enable figure
+        // Enable figure
         figure: true,
-          // Enable image lazyload
+        // Enable image lazyload
         imgLazyload: true,
-          // Enable image mark
+        // Enable image mark
         imgMark: true,
-          // Enable image size
+        // Enable image size
         imgSize: true,
         mermaid: true,
       },

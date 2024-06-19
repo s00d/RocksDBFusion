@@ -1,3 +1,10 @@
+---
+lang: en-US
+icon: fas fa-cogs
+category:
+   - CLIENTS
+---
+
 # Rust
 
 A Rust client for interacting with a RocksDB server.

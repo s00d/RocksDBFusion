@@ -2,7 +2,7 @@
 lang: en-US
 title: Server
 sticky: 10
-icon: circle-question
+icon: fas fa-server
 star: true
 dir:
   order: 1

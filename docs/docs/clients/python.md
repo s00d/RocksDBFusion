@@ -1,4 +1,11 @@
-# python
+---
+lang: en-US
+icon: fas fa-rocket
+category:
+   - CLIENTS
+---
+
+# Python
 
 A Python client for interacting with RocksDB server.
 

@@ -1,7 +1,7 @@
 ---
 lang: en-US
 sticky: 10
-icon: circle-question
+icon: fas fa-play-circle
 star: true
 dir:
 order: 3

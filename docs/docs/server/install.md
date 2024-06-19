@@ -2,7 +2,7 @@
 lang: en-US
 title: Install
 sticky: 10
-icon: circle-question
+icon: fas fa-download
 star: true
 dir:
 order: 2
