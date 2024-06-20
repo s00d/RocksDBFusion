@@ -41,7 +41,7 @@ jobs:
             C:\Users\runneradmin\.cargo\registry\cache\
             C:\Users\runneradmin\.cargo\git\db\
             target\
-          key: ${{ runner.os }}-${{ matrix.target }}
+          key: ${{ runner.os }}-${{ matrix.args }}
 
       - name: Create .cargo/bin directory if it does not exist
         run: mkdir -p /Users/runner/.cargo/bin/
