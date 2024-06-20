@@ -43,9 +43,6 @@ jobs:
             target\
           key: ${{ runner.os }}-${{ matrix.args }}
 
-      - name: Create .cargo/bin directory if it does not exist
-        run: mkdir -p /Users/runner/.cargo/bin/
-
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
