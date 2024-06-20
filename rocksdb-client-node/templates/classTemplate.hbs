@@ -1,3 +1,6 @@
+import { createConnection } from "net";
+import type {Socket} from "node:net";
+
 interface RocksDBResponse {
     success: boolean;
     result?: string;
@@ -12,6 +15,9 @@ class RocksDBClient {
     timeout: number;
     retryInterval: number;
     private pool: any[];
+    private maxActiveConnections: number;
+    private activeConnections: number;
+    private waitingQueue: ((value: Socket) => void)[];
 
     /**
      * Constructor to initialize the RocksDB client.
@@ -29,8 +35,10 @@ class RocksDBClient {
         this.timeout = timeout;
         this.retryInterval = retryInterval;
         this.socket = null;
-
         this.pool = [];
+        this.maxActiveConnections = 10;
+        this.activeConnections = 0;
+        this.waitingQueue = [];
     }
 
     /**
@@ -43,7 +51,7 @@ class RocksDBClient {
         this.pool = [];
     }
 
-    private async createSocket(host: string, port: number): Promise<any> {
+    private async createSocket(host: string, port: number): Promise<Socket> {
         return new Promise((resolve, reject) => {
             const socket = createConnection({ host, port }, () => {
                 socket.setMaxListeners(3000);
@@ -53,15 +61,33 @@ class RocksDBClient {
         });
     }
 
-    private async getConnection(): Promise<any> {
+    private async getConnection(): Promise<Socket> {
         if (this.pool.length > 0) {
             return this.pool.pop();
         }
-        return this.createSocket(this.host, this.port);
+
+        if (this.activeConnections < this.maxActiveConnections) {
+            this.activeConnections++;
+            return this.createSocket(this.host, this.port);
+        }
+
+        // If the maximum number of active connections is reached, wait for a connection to be released
+        return new Promise((resolve) => {
+            this.waitingQueue.push(resolve);
+        });
     }
 
-    private releaseConnection(socket: any) {
-        this.pool.push(socket);
+    private releaseConnection(socket: Socket) {
+        if (this.waitingQueue.length > 0) {
+            // If there are waiting requests, resolve the first one
+            const resolve = this.waitingQueue.shift();
+            if (resolve) {
+                resolve(socket);
+            }
+        } else {
+            this.pool.push(socket);
+            this.activeConnections--;
+        }
     }
 
     async sendRequest(request: object): Promise<RocksDBResponse> {
@@ -69,25 +95,52 @@ class RocksDBClient {
             (request as any).token = this.token;
         }
 
-        const requestJson = JSON.stringify(request) + "\n";
+        const requestData = JSON.stringify(request); // Use JSON encoding
         const socket = await this.getConnection();
-        socket.write(requestJson);
+        socket.write(Buffer.concat([Buffer.from(requestData), Buffer.from('\n')]));
 
         return new Promise((resolve, reject) => {
-            socket.once('data', (responseJson: string) => {
-                this.releaseConnection(socket);
+            let dataBuffer: Buffer[] = [];
 
-                try {
-                    const response: RocksDBResponse = JSON.parse(responseJson);
-                    resolve(response);
-                } catch (error) {
-                    reject(new Error("Invalid response from server"));
+            const onData = (data: Buffer) => {
+                dataBuffer.push(data);
+
+                const responseBuffer = Buffer.concat(dataBuffer);
+                const separatorIndex = responseBuffer.indexOf('\n');
+
+                if (separatorIndex !== -1) {
+                    const completeMessage = responseBuffer.slice(0, separatorIndex).toString();
+                    const remainingBuffer = responseBuffer.slice(separatorIndex + 1);
+
+                    try {
+                        const response: RocksDBResponse = JSON.parse(completeMessage); // Use JSON decoding
+                        socket.removeListener('data', onData);
+                        this.releaseConnection(socket);
+                        resolve(response);
+                    } catch (error) {
+                        console.error("Failed to decode response: {}", error);
+                        reject(new Error("Failed to decode response"));
+                    }
+
+                    dataBuffer = [];
+                    if (remainingBuffer.length > 0) {
+                        dataBuffer.push(remainingBuffer);
+                    }
                 }
-            });
+            };
+
+            socket.on('data', onData);
 
             socket.once('error', (err: Error) => {
+                socket.removeListener('data', onData);
                 this.releaseConnection(socket);
                 reject(err);
+            });
+
+            socket.once('close', () => {
+                socket.removeListener('data', onData);
+                this.releaseConnection(socket);
+                reject(new Error("Connection closed before response was received"));
             });
         });
     }

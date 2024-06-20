@@ -1,6 +1,6 @@
 {
   "name": "rocksdb-client-node",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A RocksDB client implementation in TypeScript",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -12,10 +12,7 @@
   "author": "s00d",
   "license": "MIT",
   "dependencies": {
-    "handlebars": "^4.7.8",
-    "install": "^0.13.0",
-    "msgpack-lite": "^0.1.26",
-    "npm": "^10.8.1"
+    "handlebars": "^4.7.8"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
