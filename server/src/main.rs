@@ -11,13 +11,13 @@ use async_std::sync::Arc;
 use async_std::task;
 use futures::stream::StreamExt;
 use futures::FutureExt;
-
-use crate::helpers::{create_lock_guard, LogLevel};
-use crate::server::{Request, RocksDBServer};
 use log::{error, info, warn};
 use std::env;
 use std::path::PathBuf;
 use structopt::StructOpt;
+
+use crate::helpers::{create_lock_guard, LogLevel};
+use crate::server::{Request, RocksDBServer};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "RocksDB Server", about = "A simple RocksDB server.")]
@@ -172,25 +172,24 @@ async fn handle_connection(
     socket: TcpStream,
     server: Arc<RocksDBServer>,
 ) -> async_std::io::Result<()> {
-    let reader = BufReader::new(&socket);
+    let mut buffer = Vec::new();
+    let mut reader = BufReader::new(&socket);
     let mut writer = BufWriter::new(&socket);
-    let mut lines = reader.lines();
 
-    while let Some(line) = lines.next().await {
-        match line {
-            Ok(buffer) => {
-                let request: Request = match serde_json::from_str(&buffer) {
-                    Ok(req) => req,
+    while reader.read_until(b'\n', &mut buffer).await? != 0 {
+
+        match serde_json::from_slice::<Request>(&buffer) {
+            Ok(request) => {
+                let response = server.handle_request(request.clone()).await;
+                let response = match serde_json::to_vec(&response) {
+                    Ok(data) => data,
                     Err(e) => {
-                        error!("Failed to parse request: {}", e);
+                        error!("Failed to serialize response: {} request {:?}", e, request.clone());
                         continue;
                     }
                 };
 
-                let response = server.handle_request(request).await;
-                let response_data = serde_json::to_vec(&response).unwrap();
-
-                if writer.write_all(&response_data).await.is_err() {
+                if writer.write_all(&response).await.is_err() {
                     error!("Failed to write to socket");
                     break;
                 }
@@ -204,11 +203,12 @@ async fn handle_connection(
                 }
             }
             Err(e) => {
-                error!("Failed to read from socket: {}", e);
-                return Err(e);
+                error!("Failed to parse request: {} - {:?}", e, &buffer);
             }
         }
+        buffer.clear();
     }
 
     Ok(())
 }
+
