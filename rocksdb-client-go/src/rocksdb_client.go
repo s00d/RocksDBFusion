@@ -22,7 +22,6 @@ type Request struct {
 type Response struct {
 	Success bool   `json:"success"`
 	Result  string `json:"result"`
-	Error   string `json:"error"`
 }
 
 type RocksDBClient struct {
@@ -89,7 +88,7 @@ func (c *RocksDBClient) SendRequest(request Request) (*Response, error) {
 	}
 
 	if !response.Success {
-		return nil, fmt.Errorf("server error: %s", response.Error)
+		return nil, fmt.Errorf("server error: %s", response.Result)
 	}
 
 	return response, nil

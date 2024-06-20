@@ -4,7 +4,6 @@ import type {Socket} from "node:net";
 interface RocksDBResponse {
     success: boolean;
     result?: string;
-    error?: string;
 }
 
 class RocksDBClient {
@@ -152,12 +151,12 @@ class RocksDBClient {
      * @return {any} The result from the response.
      * @throws {Error} If the response indicates an error.
      */
-    handleResponse(response: RocksDBResponse): string|null {
-        if (response.success && response.result !== undefined) {
+    handleResponse(response: RocksDBResponse): string|null|undefined {
+        if (response.success) {
             return response.result;
         }
 
-        throw new Error(response.error);
+        throw new Error(response.result);
     }
 
     /**

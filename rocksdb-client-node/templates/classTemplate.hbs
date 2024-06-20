@@ -4,7 +4,6 @@ import type {Socket} from "node:net";
 interface RocksDBResponse {
     success: boolean;
     result?: string;
-    error?: string;
 }
 
 class RocksDBClient {
@@ -157,7 +156,7 @@ class RocksDBClient {
             return response.result;
         }
 
-        throw new Error(response.error);
+        throw new Error(response.result);
     }
 
 {{{methods}}}

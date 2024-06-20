@@ -29,7 +29,6 @@ pub struct Request {
 pub struct Response {
     pub success: bool,
     pub result: Option<String>,
-    pub error: Option<String>,
 }
 
 pub struct RequestHandler {
@@ -92,7 +91,7 @@ impl RequestHandler {
         if response.success {
             Ok(response.result)
         } else {
-            Err(response.error.unwrap_or("Unknown error".to_string()))
+            Err(response.result.unwrap_or("Unknown error".to_string()))
         }
     }
 }

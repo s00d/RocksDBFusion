@@ -59,7 +59,7 @@ class RocksDBClient:
     def handle_response(self, response):
         if response['success'] and 'result' in response:
             return response['result']
-        raise Exception(response['error'])
+        raise Exception(response['result'])
 
         async def put(self, key: str, value: str, cf_name: str|None = None, txn: bool|None = None):
         """

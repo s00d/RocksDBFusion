@@ -1,7 +1,6 @@
 interface RocksDBResponse {
     success: boolean;
     result?: string;
-    error?: string;
 }
 declare class RocksDBClient {
     host: string;
@@ -10,6 +9,10 @@ declare class RocksDBClient {
     socket: any;
     timeout: number;
     retryInterval: number;
+    private pool;
+    private maxActiveConnections;
+    private activeConnections;
+    private waitingQueue;
     /**
      * Constructor to initialize the RocksDB client.
      *
@@ -21,38 +24,13 @@ declare class RocksDBClient {
      */
     constructor(host: string, port: number, token?: string | null, timeout?: number, retryInterval?: number);
     /**
-     * Connects to the RocksDB server with retry mechanism.
-     *
-     * @throws {Error} If unable to connect to the server.
-     */
-    connect(): Promise<void>;
-    /**
-     * Closes the socket connection.
+     * Closes all connections in the pool.
      */
     close(): void;
-    /**
-     * Creates a socket connection.
-     * @private
-     */
-    createSocket(host: string, port: number): Promise<any>;
-    /**
-     * Sleeps for the given number of milliseconds.
-     * @private
-     */
-    sleep(ms: number): Promise<void>;
-    /**
-     * Sends a request to the RocksDB server.
-     *
-     * @param {object} request The request to be sent.
-     * @return {Promise<object>} The response from the server.
-     * @throws {Error} If the response from the server is invalid.
-     */
+    private createSocket;
+    private getConnection;
+    private releaseConnection;
     sendRequest(request: object): Promise<RocksDBResponse>;
-    /**
-     * Reads data from the socket.
-     * @private
-     */
-    readSocket(): Promise<string>;
     /**
      * Handles the response from the server.
      *
@@ -60,7 +38,7 @@ declare class RocksDBClient {
      * @return {any} The result from the response.
      * @throws {Error} If the response indicates an error.
      */
-    handleResponse(response: RocksDBResponse): string | null;
+    handleResponse(response: RocksDBResponse): string | null | undefined;
     /**
      * Inserts a key-value pair into the database.
      * This function handles the `put` action which inserts a specified key-value pair into the RocksDB database.
@@ -74,7 +52,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    put(key: string, value: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null>;
+    put(key: string, value: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null | undefined>;
     /**
      * Retrieves the value associated with a key from the database.
      * This function handles the `get` action which fetches the value associated with a specified key from the RocksDB database.
@@ -88,7 +66,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    get(key: string, cf_name?: string | null, default_value?: string | null, txn?: boolean | null): Promise<string | null>;
+    get(key: string, cf_name?: string | null, default_value?: string | null, txn?: boolean | null): Promise<string | null | undefined>;
     /**
      * Deletes a key-value pair from the database.
      * This function handles the `delete` action which removes a specified key-value pair from the RocksDB database.
@@ -101,7 +79,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    delete(key: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null>;
+    delete(key: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null | undefined>;
     /**
      * Merges a value with an existing key in the database.
      * This function handles the `merge` action which merges a specified value with an existing key in the RocksDB database.
@@ -115,7 +93,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    merge(key: string, value: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null>;
+    merge(key: string, value: string, cf_name?: string | null, txn?: boolean | null): Promise<string | null | undefined>;
     /**
      * Retrieves a property of the database.
      * This function handles the `get_property` action which fetches a specified property of the RocksDB database.
@@ -127,7 +105,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    getProperty(value: string, cf_name?: string | null): Promise<string | null>;
+    getProperty(value: string, cf_name?: string | null): Promise<string | null | undefined>;
     /**
      * Retrieves a range of keys from the database.
      * This function handles the `keys` action which retrieves a range of keys from the RocksDB database.
@@ -140,7 +118,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    keys(start: string, limit: string, query?: string | null): Promise<string | null>;
+    keys(start: string, limit: string, query?: string | null): Promise<string | null | undefined>;
     /**
      * Retrieves all keys from the database.
      * This function handles the `all` action which retrieves all keys from the RocksDB database.
@@ -151,7 +129,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    all(query?: string | null): Promise<string | null>;
+    all(query?: string | null): Promise<string | null | undefined>;
     /**
      * Lists all column families in the database.
      * This function handles the `list_column_families` action which lists all column families in the RocksDB database.
@@ -161,7 +139,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    listColumnFamilies(): Promise<string | null>;
+    listColumnFamilies(): Promise<string | null | undefined>;
     /**
      * Creates a new column family in the database.
      * This function handles the `create_column_family` action which creates a new column family in the RocksDB database.
@@ -172,7 +150,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    createColumnFamily(cf_name: string): Promise<string | null>;
+    createColumnFamily(cf_name: string): Promise<string | null | undefined>;
     /**
      * Drops an existing column family from the database.
      * This function handles the `drop_column_family` action which drops an existing column family from the RocksDB database.
@@ -183,7 +161,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    dropColumnFamily(cf_name: string): Promise<string | null>;
+    dropColumnFamily(cf_name: string): Promise<string | null | undefined>;
     /**
      * Compacts a range of keys in the database.
      * This function handles the `compact_range` action which compacts a specified range of keys in the RocksDB database.
@@ -196,7 +174,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    compactRange(start?: string | null, end?: string | null, cf_name?: string | null): Promise<string | null>;
+    compactRange(start?: string | null, end?: string | null, cf_name?: string | null): Promise<string | null | undefined>;
     /**
      * Adds a key-value pair to the current write batch.
      * This function handles the `write_batch_put` action which adds a specified key-value pair to the current write batch.
@@ -209,7 +187,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    writeBatchPut(key: string, value: string, cf_name?: string | null): Promise<string | null>;
+    writeBatchPut(key: string, value: string, cf_name?: string | null): Promise<string | null | undefined>;
     /**
      * Merges a value with an existing key in the current write batch.
      * This function handles the `write_batch_merge` action which merges a specified value with an existing key in the current write batch.
@@ -222,7 +200,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    writeBatchMerge(key: string, value: string, cf_name?: string | null): Promise<string | null>;
+    writeBatchMerge(key: string, value: string, cf_name?: string | null): Promise<string | null | undefined>;
     /**
      * Deletes a key from the current write batch.
      * This function handles the `write_batch_delete` action which deletes a specified key from the current write batch.
@@ -234,7 +212,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    writeBatchDelete(key: string, cf_name?: string | null): Promise<string | null>;
+    writeBatchDelete(key: string, cf_name?: string | null): Promise<string | null | undefined>;
     /**
      * Writes the current write batch to the database.
      * This function handles the `write_batch_write` action which writes the current write batch to the RocksDB database.
@@ -243,7 +221,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    writeBatchWrite(): Promise<string | null>;
+    writeBatchWrite(): Promise<string | null | undefined>;
     /**
      * Clears the current write batch.
      * This function handles the `write_batch_clear` action which clears the current write batch.
@@ -252,7 +230,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    writeBatchClear(): Promise<string | null>;
+    writeBatchClear(): Promise<string | null | undefined>;
     /**
      * Destroys the current write batch.
      * This function handles the `write_batch_destroy` action which destroys the current write batch.
@@ -261,7 +239,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    writeBatchDestroy(): Promise<string | null>;
+    writeBatchDestroy(): Promise<string | null | undefined>;
     /**
      * Creates a new iterator for the database.
      * This function handles the `create_iterator` action which creates a new iterator for iterating over the keys in the RocksDB database.
@@ -270,7 +248,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    createIterator(): Promise<string | null>;
+    createIterator(): Promise<string | null | undefined>;
     /**
      * Destroys an existing iterator.
      * This function handles the `destroy_iterator` action which destroys an existing iterator in the RocksDB database.
@@ -281,7 +259,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    destroyIterator(iterator_id: string): Promise<string | null>;
+    destroyIterator(iterator_id: string): Promise<string | null | undefined>;
     /**
      * Seeks to a specific key in the iterator.
      * This function handles the `iterator_seek` action which seeks to a specified key in an existing iterator in the RocksDB database.
@@ -293,7 +271,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    iteratorSeek(iterator_id: string, key: string): Promise<string | null>;
+    iteratorSeek(iterator_id: string, key: string): Promise<string | null | undefined>;
     /**
      * Advances the iterator to the next key.
      * This function handles the `iterator_next` action which advances an existing iterator to the next key in the RocksDB database.
@@ -304,7 +282,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    iteratorNext(iterator_id: string): Promise<string | null>;
+    iteratorNext(iterator_id: string): Promise<string | null | undefined>;
     /**
      * Moves the iterator to the previous key.
      * This function handles the `iterator_prev` action which moves an existing iterator to the previous key in the RocksDB database.
@@ -315,7 +293,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    iteratorPrev(iterator_id: string): Promise<string | null>;
+    iteratorPrev(iterator_id: string): Promise<string | null | undefined>;
     /**
      * Creates a backup of the database.
      * This function handles the `backup` action which creates a backup of the RocksDB database.
@@ -324,7 +302,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    backup(): Promise<string | null>;
+    backup(): Promise<string | null | undefined>;
     /**
      * Restores the database from the latest backup.
      * This function handles the `restore_latest` action which restores the RocksDB database from the latest backup.
@@ -333,7 +311,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    restoreLatest(): Promise<string | null>;
+    restoreLatest(): Promise<string | null | undefined>;
     /**
      * Restores the database from a specified backup.
      * This function handles the `restore` action which restores the RocksDB database from a specified backup.
@@ -344,7 +322,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    restore(backup_id: string): Promise<string | null>;
+    restore(backup_id: string): Promise<string | null | undefined>;
     /**
      * Retrieves information about all backups.
      * This function handles the `get_backup_info` action which retrieves information about all backups of the RocksDB database.
@@ -353,7 +331,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    getBackupInfo(): Promise<string | null>;
+    getBackupInfo(): Promise<string | null | undefined>;
     /**
      * Begins a new transaction.
      * This function handles the `begin_transaction` action which begins a new transaction in the RocksDB database.
@@ -362,7 +340,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    beginTransaction(): Promise<string | null>;
+    beginTransaction(): Promise<string | null | undefined>;
     /**
      * Commits an existing transaction.
      * This function handles the `commit_transaction` action which commits an existing transaction in the RocksDB database.
@@ -372,7 +350,7 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    commitTransaction(): Promise<string | null>;
+    commitTransaction(): Promise<string | null | undefined>;
     /**
      * Rolls back an existing transaction.
      * This function handles the `rollback_transaction` action which rolls back an existing transaction in the RocksDB database.
@@ -382,6 +360,6 @@ declare class RocksDBClient {
      * @return {Promise<any>} The result of the operation.
      * @throws {Error} If the operation fails.
      */
-    rollbackTransaction(): Promise<string | null>;
+    rollbackTransaction(): Promise<string | null | undefined>;
 }
 export default RocksDBClient;

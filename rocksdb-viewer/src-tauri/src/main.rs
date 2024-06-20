@@ -23,7 +23,6 @@ struct Request {
 struct Response {
     success: bool,
     result: Option<String>,
-    error: Option<String>,
 }
 
 struct ServerState {
@@ -150,7 +149,7 @@ async fn put_value(
     if response.success {
         Ok(())
     } else {
-        Err(response.error.unwrap_or("Failed to put value".to_string()))
+        Err(response.result.unwrap_or("Failed to put value".to_string()))
     }
 }
 
@@ -175,7 +174,7 @@ async fn delete_value(
     if response.success {
         Ok(())
     } else {
-        Err(response.error.unwrap_or("Failed to delete value".to_string()))
+        Err(response.result.unwrap_or("Failed to delete value".to_string()))
     }
 }
 

@@ -32,7 +32,6 @@ impl Request {
 pub struct Response {
     pub success: bool,
     pub result: Option<String>,
-    pub error: Option<String>,
 }
 
 #[derive(Clone)]
@@ -70,8 +69,7 @@ impl RocksDBServer {
             error!("Unauthorized request: {:?}", req);
             return Response {
                 success: false,
-                result: None,
-                error: Some("Unauthorized".to_string()),
+                result: Some("Unauthorized".to_string()),
             };
         }
 
@@ -122,12 +120,10 @@ impl RocksDBServer {
             Ok(response) => Response {
                 success: true,
                 result: response,
-                error: None,
             },
             Err(e) => Response {
                 success: false,
-                result: None,
-                error: Some(e),
+                result: Some(e),
             },
         }
     }
