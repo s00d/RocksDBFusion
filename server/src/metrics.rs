@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use prometheus::{Encoder, TextEncoder, register_histogram, Histogram, register_int_counter, IntCounter, register_int_gauge, IntGauge, Gauge, register_gauge};
 use once_cell::sync::Lazy;
 use log::{info, error};
-use sysinfo::{System, SystemExt, ProcessExt};
+use sysinfo::{Pid, System};
 
 pub struct Metrics {
     pub enabled: AtomicBool,
@@ -110,7 +110,7 @@ impl Metrics {
         let mut system = System::new_all();
         system.refresh_all();
 
-        if let Some(process) = system.process(std::process::id() as i32) {
+        if let Some(process) = system.process(Pid::from(std::process::id() as usize)) {
             self.memory_usage.set(process.memory() as f64);
             self.cpu_usage.set(process.cpu_usage() as f64);
 
