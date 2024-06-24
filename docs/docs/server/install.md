@@ -55,14 +55,14 @@ brew install rocksdb_server
 After installation, you can start the server with:
 
 ```sh
-rocksdb_server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
+rocksdb_server --dbpath ./db_test --address 127.0.0.1:12345 --host 127.0.0.1 --log-level info
 ```
 
 Or start it as a service with:
 
 ```sh
 export ROCKSDB_PATH="$(brew --prefix)/var/rocksdb/db"
-export ROCKSDB_PORT=12345
+export ROCKSDB_ADDRESS=127.0.0.1:12345
 export ROCKSDB_LOCK_FILE="$(brew --prefix)/var/rocksdb/rocksdb.lock"
 
 brew services start rocksdb_server
@@ -85,7 +85,7 @@ RocksDB Server is available as a Snap package for easy installation on Linux sys
 
 3. Start the server:
    ```sh
-   rocksdb-server.rocksdb-server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
+   rocksdb-server.rocksdb-server --dbpath ./db_test --address 127.0.0.1:12345 --host 127.0.0.1 --log-level info
    ```
 
 4. Enable and start as a service:
@@ -96,8 +96,10 @@ RocksDB Server is available as a Snap package for easy installation on Linux sys
 ### Environment Variables
 
 - `ROCKSDB_PATH`: Path to the RocksDB database (default: `$(brew --prefix)/var/rocksdb/db`)
-- `ROCKSDB_PORT`: Port to listen on (default: `12345`)
+- `ROCKSDB_ADDRESS`: Port to listen on (default: `127.0.0.1:12345`)
 - `ROCKSDB_LOCK_FILE`: Path to the lock file (default: `$(brew --prefix)/var/rocksdb/rocksdb.lock`)
+
+see `rocksdb-server -h`
 
 ### Finding Logs
 
@@ -147,9 +149,9 @@ xattr -cr ./server-0.1.2-aarch64-apple-darwin && codesign --force --deep --sign 
 
    [Service]
    Environment="ROCKSDB_PATH=${ROCKSDB_PATH:-/var/rocksdb/db}"
-   Environment="ROCKSDB_PORT=${ROCKSDB_PORT:-12345}"
+   Environment="ROCKSDB_PORT=${ROCKSDB_ADDRESS:-127.0.0.1:12345}"
    Environment="ROCKSDB_LOCK_FILE=${ROCKSDB_LOCK_FILE:-/var/rocksdb/rocksdb.lock}"
-   ExecStart=/usr/local/bin/rocksdb_server --dbpath $ROCKSDB_PATH --port $ROCKSDB_PORT --lock-file $ROCKSDB_LOCK_FILE --host 127.0.0.1 --log-level info
+   ExecStart=/usr/local/bin/rocksdb_server --dbpath $ROCKSDB_PATH --address $ROCKSDB_PORT --lock-file $ROCKSDB_LOCK_FILE --host 127.0.0.1 --log-level info
    Restart=always
    User=nobody
    Group=nogroup
@@ -176,20 +178,20 @@ xattr -cr ./server-0.1.2-aarch64-apple-darwin && codesign --force --deep --sign 
 To start the RocksDB server, use the following command:
 
 ```sh
-rocksdb_server --dbpath ./db_test --port 12345 --host 127.0.0.1 --log-level info
+rocksdb_server --dbpath ./db_test --address 127.0.0.1:12345 --host 127.0.0.1 --log-level info
 ```
 
 ### Command-Line Options
 
 - `--dbpath <PATH>`: Path to the RocksDB database (default: `./db_test`)
-- `--port <PORT>`: Port to listen on (default: `12345`)
-- `--host <HOST>`: Host to bind the server to (default: `127.0.0.1`)
+- `--address <HOST:PORT>`: Host and Port to listen on (default: `127.0.0.1:12345`)
 - `--ttl <TTL>`: Time-to-live (TTL) for database entries in seconds
 - `--token <TOKEN>`: Authentication token for server access
 - `--log-level <LEVEL>`: Logging level (debug, info, warn, error)
 - `--lock-file <FILE>`: Path to the lock file
 - `--cache`: Enable cache layer (default: `false`).
 - `--cache-ttl`: Cache time-to-live in seconds (default: `1800`).
+- `--metrics <HOST:PORT>`: Enable metrics server with the specified host and port.
 
 
 ### Logging

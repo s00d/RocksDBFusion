@@ -1,9 +1,10 @@
+use crate::cache::queue::{TaskQueue, TaskType};
 use crate::db_manager::RocksDBManager;
-use crate::queue::{TaskQueue, TaskType};
 use async_std::sync::{Arc, RwLock};
 use async_std::task;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use crate::metrics::METRICS;
 
 type CacheData = Arc<RwLock<HashMap<(String, Option<String>), (String, Instant)>>>;
 
@@ -54,8 +55,10 @@ impl CacheLayer {
         let mut data = self.data.write().await;
         if let Some((value, expires_at)) = data.get_mut(&(key.to_string(), cf_name)) {
             *expires_at = Instant::now() + self.ttl;
+            METRICS.inc_cache_hits();
             return Some(value.clone());
         }
+        METRICS.inc_cache_misses();
         None
     }
 
@@ -64,6 +67,7 @@ impl CacheLayer {
             let mut data = self.data.write().await;
             let expires_at = Instant::now() + self.ttl;
             data.insert((key.clone(), cf_name.clone()), (value.clone(), expires_at));
+            METRICS.inc_cache_set();
             self.task_queue
                 .add_task(TaskType::Put, key, Some(value), cf_name)
                 .await;

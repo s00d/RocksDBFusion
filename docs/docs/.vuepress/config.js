@@ -42,6 +42,7 @@ export default defineUserConfig({
           "install.md",
           "methods.md",
           "structure.md",
+          "metrics.md",
         ],
       },
       {

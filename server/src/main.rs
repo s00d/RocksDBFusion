@@ -1,8 +1,8 @@
 mod cache;
 pub mod db_manager;
 mod helpers;
-mod queue;
 pub mod server;
+mod metrics;
 
 use async_std::channel::{bounded, Receiver};
 use async_std::io::{prelude::*, BufReader, BufWriter};
@@ -14,10 +14,41 @@ use futures::FutureExt;
 use log::{error, info, warn};
 use std::env;
 use std::path::PathBuf;
+use std::time::Instant;
 use structopt::StructOpt;
 
 use crate::helpers::{create_lock_guard, LogLevel};
+use crate::metrics::{METRICS, Metrics};
 use crate::server::{Request, RocksDBServer};
+
+async fn metrics_server(metrics_addr: String) {
+    // Вызовем observe с начальным значением 0, чтобы добавить метрику в систему
+    METRICS.observe_request_duration(0.0);
+
+    let listener = TcpListener::bind(&metrics_addr).await.unwrap();
+    warn!("Metrics server running on {}", metrics_addr);
+    while let Ok((mut stream, _)) = listener.accept().await {
+        info!("Metrics request received");
+        let response = Metrics::gather_metrics();
+        info!("Gathered metrics: {}", response);
+
+        let http_response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
+            response.len(),
+            response
+        );
+
+        match stream.write_all(http_response.as_bytes()).await {
+            Ok(_) => info!("Successfully wrote metrics response"),
+            Err(e) => error!("Failed to write metrics response: {}", e),
+        }
+        if let Err(e) = stream.flush().await {
+            error!("Failed to flush metrics response: {}", e);
+        }
+    }
+}
+
+
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "RocksDB Server", about = "A simple RocksDB server.")]
@@ -33,20 +64,11 @@ struct Opt {
 
     #[structopt(
         long,
-        env = "ROCKSDB_HOST",
-        default_value = "127.0.0.1",
+        env = "ROCKSDB_ADDRESS",
+        default_value = "127.0.0.1:12345",
         help = "Bind address"
     )]
-    host: String,
-
-    #[structopt(
-        long,
-        short,
-        env = "ROCKSDB_PORT",
-        default_value = "12345",
-        help = "Bind Port"
-    )]
-    port: String,
+    address: String,
 
     #[structopt(
         long,
@@ -84,6 +106,13 @@ struct Opt {
         help = "Cache time-to-live in seconds"
     )]
     cache_ttl: u64,
+
+    #[structopt(
+        long,
+        env = "ROCKSDB_METRICS",
+        help = "Enable metrics server with host:port"
+    )]
+    metrics: Option<String>,
 }
 
 #[async_std::main]
@@ -97,8 +126,7 @@ async fn main() {
     };
     let dbpath = dbpath.to_str().unwrap().to_string();
 
-    let port = opt.port;
-    let host = opt.host;
+    let address = opt.address;
     let ttl = opt.ttl;
     let token = opt.token;
     let cache = opt.cache;
@@ -117,7 +145,12 @@ async fn main() {
         .target(env_logger::Target::Stdout)
         .init();
 
-    let addr = format!("{}:{}", host, port);
+    if let Some(metrics) = opt.metrics.as_ref() {
+        let metrics_addr = metrics.clone();
+        task::spawn(metrics_server(metrics_addr));
+    }
+
+    let addr = format!("{}",address);
     let listener = TcpListener::bind(&addr).await.unwrap();
     let server = Arc::new(RocksDBServer::new(dbpath, ttl, token, Some(cache_ttl), cache).unwrap());
 
@@ -177,6 +210,9 @@ async fn handle_connection(
     let mut writer = BufWriter::new(&socket);
 
     while reader.read_until(b'\n', &mut buffer).await? != 0 {
+        let start = Instant::now();
+        METRICS.inc_active_requests();
+        METRICS.inc_requests();
 
         match serde_json::from_slice::<Request>(&buffer) {
             Ok(request) => {
@@ -184,7 +220,11 @@ async fn handle_connection(
                 let response = match serde_json::to_vec(&response) {
                     Ok(data) => data,
                     Err(e) => {
-                        error!("Failed to serialize response: {} request {:?}", e, request.clone());
+                        error!(
+                            "Failed to serialize response: {} request {:?}",
+                            e,
+                            request.clone()
+                        );
                         continue;
                     }
                 };
@@ -206,6 +246,9 @@ async fn handle_connection(
                 error!("Failed to parse request: {} - {:?}", e, &buffer);
             }
         }
+
+        METRICS.observe_request_duration(start.elapsed().as_secs_f64());
+        METRICS.dec_active_requests();
         buffer.clear();
     }
 

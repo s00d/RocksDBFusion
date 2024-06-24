@@ -41,7 +41,8 @@ jobs:
             C:\Users\runneradmin\.cargo\registry\cache\
             C:\Users\runneradmin\.cargo\git\db\
             target\
-          key: ${{ runner.os }}-${{ matrix.args }}
+            rocksdb-viewer\src-tauri\target\
+          key: ${{ runner.os }}-${{ matrix.args }}-${{ hashFiles('rocksdb-viewer/src-tauri/Cargo.lock') }}
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable

@@ -62,17 +62,14 @@ The server is built using the following dependencies:
 The server can be configured using command-line arguments or environment variables. The available options are:
 
 - `--dbpath`, `-d`: Path to the RocksDB database (default: `./db_test`).
-- `--host`: Bind address (default: `127.0.0.1`).
-- `--port`, `-p`: Bind port (default: `12345`).
-- `--ttl`, `-t`: Time-to-live (TTL) for database entries in seconds.
-- `--token`: Authentication token for server access.
-- `--lock-file`: Path to the lock file.
-- `--log-level`: Logging level (default: `info`).
+- `--address <HOST:PORT>`: Host and Port to listen on (default: `127.0.0.1:12345`)
+
+see halp
 
 Example:
 
 ```bash
-ROCKSDB_PATH=./mydb ROCKSDB_PORT=12345 cargo run --release
+ROCKSDB_PATH=./mydb ROCKSDB_ADDRESS=127.0.0.1:12345 cargo run --release
 ```
 
 ## Usage
