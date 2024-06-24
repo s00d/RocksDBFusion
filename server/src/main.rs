@@ -132,12 +132,16 @@ async fn main() {
         METRICS.set_enabled(true);
         METRICS.observe_request_duration(0.0);
 
-        warn!("<etrics listening on http://{}/metrics", addr);
+        warn!("> Metrics listening on http://{}/metrics", addr);
     }
+    if opt.health_check {
+        warn!("> Health check endpoint listening on http://{}/health", addr); // Добавлен вывод для health_check
+    }
+
 
     let server = Arc::new(RocksDBServer::new(dbpath, ttl, token, Some(cache_ttl), cache).unwrap());
 
-    warn!("Server listening on {}", addr);
+    warn!("> Server listening on {}", addr);
 
     let (signal_sender, signal_receiver) = bounded(1);
     ctrlc::set_handler(move || {
@@ -245,7 +249,11 @@ async fn handle_connection(
             Ok(request) => {
                 let response = server.handle_request(request.clone()).await;
                 let response = match serde_json::to_vec(&response) {
-                    Ok(data) => data,
+                    Ok(data) => {
+                        let response_size = data.len() as u64;  // Размер ответа в байтах
+                        METRICS.inc_response_speed_bytes(response_size);  // Наблюдаем за размером ответа
+                        data
+                    },
                     Err(e) => {
                         METRICS.inc_request_failure();
                         error!(

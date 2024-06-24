@@ -9,7 +9,7 @@ pub struct Metrics {
     pub enabled: AtomicBool,
     pub requests: IntCounter,
     pub request_duration: Histogram,
-    pub response_speed: IntCounter,
+    pub response_speed_bytes: IntCounter,
     pub cache_hits: IntCounter,
     pub cache_set: IntCounter,
     pub cache_misses: IntCounter,
@@ -42,7 +42,7 @@ impl Metrics {
                 "request_duration_seconds",
                 "The duration of the request in seconds"
             ).unwrap(),
-            response_speed: register_int_counter!(
+            response_speed_bytes: register_int_counter!(
                 "response_speed_bytes",
                 "The speed of the response in bytes"
             ).unwrap(),
@@ -174,6 +174,12 @@ impl Metrics {
     pub fn inc_cache_set(&self) {
         if self.enabled.load(Ordering::Relaxed) {
             self.cache_set.inc();
+        }
+    }
+
+    pub fn inc_response_speed_bytes(&self, bytes: u64) {  // Вернулся к байтам
+        if self.enabled.load(Ordering::Relaxed) {
+            self.response_speed_bytes.inc_by(bytes);
         }
     }
 }
