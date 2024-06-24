@@ -14,41 +14,12 @@ use futures::FutureExt;
 use log::{error, info, warn};
 use std::env;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Instant};
 use structopt::StructOpt;
 
 use crate::helpers::{create_lock_guard, LogLevel};
 use crate::metrics::{METRICS, Metrics};
 use crate::server::{Request, RocksDBServer};
-
-async fn metrics_server(metrics_addr: String) {
-    // Вызовем observe с начальным значением 0, чтобы добавить метрику в систему
-    METRICS.observe_request_duration(0.0);
-
-    let listener = TcpListener::bind(&metrics_addr).await.unwrap();
-    warn!("Metrics server running on {}", metrics_addr);
-    while let Ok((mut stream, _)) = listener.accept().await {
-        info!("Metrics request received");
-        let response = Metrics::gather_metrics();
-        info!("Gathered metrics: {}", response);
-
-        let http_response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
-            response.len(),
-            response
-        );
-
-        match stream.write_all(http_response.as_bytes()).await {
-            Ok(_) => info!("Successfully wrote metrics response"),
-            Err(e) => error!("Failed to write metrics response: {}", e),
-        }
-        if let Err(e) = stream.flush().await {
-            error!("Failed to flush metrics response: {}", e);
-        }
-    }
-}
-
-
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "RocksDB Server", about = "A simple RocksDB server.")]
@@ -110,9 +81,16 @@ struct Opt {
     #[structopt(
         long,
         env = "ROCKSDB_METRICS",
-        help = "Enable metrics server with host:port"
+        help = "Enable metrics server"
     )]
-    metrics: Option<String>,
+    metrics: bool,
+
+    #[structopt(
+        long,
+        env = "ROCKSDB_HEALTH_CHECK",
+        help = "Enable health check endpoint"
+    )]
+    health_check: bool,
 }
 
 #[async_std::main]
@@ -145,13 +123,18 @@ async fn main() {
         .target(env_logger::Target::Stdout)
         .init();
 
-    if let Some(metrics) = opt.metrics.as_ref() {
-        let metrics_addr = metrics.clone();
-        task::spawn(metrics_server(metrics_addr));
-    }
+
 
     let addr = format!("{}",address);
     let listener = TcpListener::bind(&addr).await.unwrap();
+
+    if opt.metrics {
+        METRICS.set_enabled(true);
+        METRICS.observe_request_duration(0.0);
+
+        warn!("<etrics listening on http://{}/metrics", addr);
+    }
+
     let server = Arc::new(RocksDBServer::new(dbpath, ttl, token, Some(cache_ttl), cache).unwrap());
 
     warn!("Server listening on {}", addr);
@@ -162,7 +145,7 @@ async fn main() {
     })
     .expect("Error setting Ctrl-C handler");
 
-    let server_task = task::spawn(handle_incoming_connections(listener, server));
+    let server_task = task::spawn(handle_incoming_connections(listener, server, opt.metrics, opt.health_check));
     let signal_task = task::spawn(handle_signals(signal_receiver));
 
     futures::select! {
@@ -175,7 +158,7 @@ async fn main() {
     info!("Server has shut down gracefully");
 }
 
-async fn handle_incoming_connections(listener: TcpListener, server: Arc<RocksDBServer>) {
+async fn handle_incoming_connections(listener: TcpListener, server: Arc<RocksDBServer>, metrics: bool, health_check: bool) {
     listener
         .incoming()
         // .for_each_concurrent(Some(1000), |stream| { // Limit concurrency to 1000
@@ -185,7 +168,7 @@ async fn handle_incoming_connections(listener: TcpListener, server: Arc<RocksDBS
             async move {
                 match stream {
                     Ok(stream) => {
-                        task::spawn(handle_connection(stream, server));
+                        task::spawn(handle_connection(stream, server, metrics, health_check));
                     }
                     Err(e) => {
                         error!("Failed to accept connection: {}", e);
@@ -204,12 +187,56 @@ async fn handle_signals(signal_receiver: Receiver<()>) {
 async fn handle_connection(
     socket: TcpStream,
     server: Arc<RocksDBServer>,
+    metrics: bool,
+    health_check: bool,
 ) -> async_std::io::Result<()> {
     let mut buffer = Vec::new();
     let mut reader = BufReader::new(&socket);
     let mut writer = BufWriter::new(&socket);
 
     while reader.read_until(b'\n', &mut buffer).await? != 0 {
+        let request_str = String::from_utf8_lossy(&buffer);
+        println!("Received request: {}", request_str);
+
+        if buffer.starts_with(b"GET /favicon.ico") {
+            println!("Ignoring /favicon.ico request");
+            return Ok(());
+        }
+
+        if health_check && buffer.starts_with(b"GET /health ") {
+            let http_response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK";
+
+            match writer.write_all(http_response.as_bytes()).await {
+                Ok(_) => info!("Successfully wrote health check response"),
+                Err(e) => error!("Failed to write health check response: {}", e),
+            }
+            if let Err(e) = writer.flush().await {
+                error!("Failed to flush health check response: {}", e);
+            }
+            return Ok(());
+        }
+
+        if metrics && buffer.starts_with(b"GET /metrics ") {
+            METRICS.update_system_metrics();
+
+            let response = Metrics::gather_metrics();
+            let http_response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\n\r\n{}",
+                response.len(),
+                response
+            );
+
+            match writer.write_all(http_response.as_bytes()).await {
+                Ok(_) => info!("Successfully wrote metrics response"),
+                Err(e) => error!("Failed to write metrics response: {}", e),
+            }
+            if let Err(e) = writer.flush().await {
+                error!("Failed to flush metrics response: {}", e);
+            }
+            return Ok(());
+        }
+
+
         let start = Instant::now();
         METRICS.inc_active_requests();
         METRICS.inc_requests();
@@ -220,6 +247,7 @@ async fn handle_connection(
                 let response = match serde_json::to_vec(&response) {
                     Ok(data) => data,
                     Err(e) => {
+                        METRICS.inc_request_failure();
                         error!(
                             "Failed to serialize response: {} request {:?}",
                             e,
@@ -230,17 +258,22 @@ async fn handle_connection(
                 };
 
                 if writer.write_all(&response).await.is_err() {
+                    METRICS.inc_request_failure();
                     error!("Failed to write to socket");
                     break;
                 }
                 if writer.write_all(b"\n").await.is_err() {
+                    METRICS.inc_request_failure();
                     error!("Failed to write to socket");
                     break;
                 }
                 if writer.flush().await.is_err() {
+                    METRICS.inc_request_failure();
                     error!("Failed to flush socket");
                     break;
                 }
+
+                METRICS.inc_request_success();
             }
             Err(e) => {
                 error!("Failed to parse request: {} - {:?}", e, &buffer);

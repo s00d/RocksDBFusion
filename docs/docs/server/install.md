@@ -93,14 +93,6 @@ RocksDB Server is available as a Snap package for easy installation on Linux sys
    sudo snap start rocksdb-server
    ```
 
-### Environment Variables
-
-- `ROCKSDB_PATH`: Path to the RocksDB database (default: `$(brew --prefix)/var/rocksdb/db`)
-- `ROCKSDB_ADDRESS`: Port to listen on (default: `127.0.0.1:12345`)
-- `ROCKSDB_LOCK_FILE`: Path to the lock file (default: `$(brew --prefix)/var/rocksdb/rocksdb.lock`)
-
-see `rocksdb-server -h`
-
 ### Finding Logs
 
 To find the logs for the RocksDB server, use the following command:
@@ -181,18 +173,20 @@ To start the RocksDB server, use the following command:
 rocksdb_server --dbpath ./db_test --address 127.0.0.1:12345 --host 127.0.0.1 --log-level info
 ```
 
-### Command-Line Options
+### Command-Line Options and Environment Variables
 
-- `--dbpath <PATH>`: Path to the RocksDB database (default: `./db_test`)
-- `--address <HOST:PORT>`: Host and Port to listen on (default: `127.0.0.1:12345`)
-- `--ttl <TTL>`: Time-to-live (TTL) for database entries in seconds
-- `--token <TOKEN>`: Authentication token for server access
-- `--log-level <LEVEL>`: Logging level (debug, info, warn, error)
-- `--lock-file <FILE>`: Path to the lock file
-- `--cache`: Enable cache layer (default: `false`).
-- `--cache-ttl`: Cache time-to-live in seconds (default: `1800`).
-- `--metrics <HOST:PORT>`: Enable metrics server with the specified host and port.
+- `--dbpath <PATH>`: Path to the RocksDB database (default: `./db_test`, env: `ROCKSDB_PATH`)
+- `--address <HOST:PORT>`: Host and Port to listen on (default: `127.0.0.1:12345`, env: `ROCKSDB_ADDRESS`)
+- `--ttl <TTL>`: Time-to-live (TTL) for database entries in seconds (env: `ROCKSDB_TTL`)
+- `--token <TOKEN>`: Authentication token for server access (env: `ROCKSDB_TOKEN`)
+- `--log-level <LEVEL>`: Logging level (debug, info, warn, error) (default: `info`, env: `ROCKSDB_LOG_LEVEL`)
+- `--lock-file <FILE>`: Path to the lock file (env: `ROCKSDB_LOCK_FILE`)
+- `--cache`: Enable cache layer (default: `false`, env: `ROCKSDB_CACHE`)
+- `--cache-ttl <TTL>`: Cache time-to-live in seconds (default: `1800`, env: `ROCKSDB_CACHE_TTL`)
+- `--metrics`: Enable metrics server (default: `false`, env: `ROCKSDB_METRICS`)
+- `--health-check`: Enable health check endpoint (default: `false`, env: `ROCKSDB_HEALTH_CHECK`)
 
+see `rocksdb-server -h`
 
 ### Logging
 
