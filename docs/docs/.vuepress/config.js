@@ -13,6 +13,8 @@ export default defineUserConfig({
   theme: hopeTheme({
     logo: '/app.png',
 
+    docsDir: 'docs/docs',
+
     iconAssets: "fontawesome",
 
     // Assuming GitHub. Can also be a full url.
@@ -46,7 +48,7 @@ export default defineUserConfig({
         ],
       },
       {
-        text: "Clients  Info",
+        text: "Clients Info",
         icon: "fas fa-code",
         path: "/clients/",
         prefix: "/clients/",
