@@ -17,6 +17,16 @@ cask "rocksdb-viewer" do
 
   app "rocksdb-viewer.app"
 
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-cr", "#{staged_path}/rocksdb-viewer.app"],
+                   sudo: true
+
+    system_command "/usr/bin/codesign",
+                   args: ["--force", "--deep", "--sign", "-", "#{staged_path}/rocksdb-viewer.app"],
+                   sudo: true
+  end
+
   zap trash: [
     "~/Library/Preferences/com.rocksdb.viewer.plist",
     "~/Library/Saved Application State/com.rocksdb.viewer.savedState",
