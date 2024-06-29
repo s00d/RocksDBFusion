@@ -31,13 +31,12 @@ class RocksdbCli < Formula
 
     # Clear extended attributes and sign the binary (macOS only)
     if OS.mac?
-      system_command "/usr/bin/xattr",
-                     args: ["-cr", "#{bin}/rocksdb_cli"],
-                     sudo: true
+      ohai "During the installation process, you will be prompted to enter your password."
+      ohai "This is necessary to make the binary executable and to self-sign the application"
+      ohai "using the `xattr` and `codesign` commands to ensure it runs correctly on macOS."
 
-      system_command "/usr/bin/codesign",
-                     args: ["--force", "--deep", "--sign", "-", "#{bin}/rocksdb_cli"],
-                     sudo: true
+      system "/usr/bin/xattr", "-cr", "#{bin}/rocksdb_cli"
+      system "/usr/bin/codesign", "--force", "--deep", "--sign", "-", "#{bin}/rocksdb_cli"
     end
   end
 
@@ -45,11 +44,4 @@ class RocksdbCli < Formula
     system "#{bin}/rocksdb_cli", "--version"
   end
 
-  def caveats
-      <<~EOS
-        During the installation process, you will be prompted to enter your password.
-        This is necessary to make the binary executable and to self-sign the application
-        using the `xattr` and `codesign` commands to ensure it runs correctly on macOS.
-      EOS
-    end
 end
