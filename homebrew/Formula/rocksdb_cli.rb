@@ -25,9 +25,29 @@ class RocksdbCli < Formula
 
   def install
     bin.install "rocksdb_cli"
+
+    # Make the binary executable
+    chmod "+x", "#{bin}/rocksdb_cli"
+
+    # Clear extended attributes and sign the binary (macOS only)
+    if OS.mac?
+      system_command "/usr/bin/xattr",
+                     args: ["-cr", "#{bin}/rocksdb_cli"],
+                     sudo: true
+
+      system_command "/usr/bin/codesign",
+                     args: ["--force", "--deep", "--sign", "-", "#{bin}/rocksdb_cli"],
+                     sudo: true
+    end
   end
 
   test do
     system "#{bin}/rocksdb_cli", "--version"
   end
+
+  caveats <<~EOS
+    During the installation process, you will be prompted to enter your password.
+    This is necessary to make the binary executable and to self-sign the application
+    using the `xattr` and `codesign` commands to ensure it runs correctly on macOS.
+  EOS
 end

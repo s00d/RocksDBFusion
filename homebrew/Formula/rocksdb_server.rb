@@ -25,18 +25,38 @@ class RocksdbServer < Formula
 
   def install
     bin.install "rocksdb_server"
+
+    # Make the binary executable
+    chmod "+x", "#{bin}/rocksdb_server"
+
+    # Clear extended attributes and sign the binary (macOS only)
+    if OS.mac?
+      system_command "/usr/bin/xattr",
+                     args: ["-cr", "#{bin}/rocksdb_server"],
+                     sudo: true
+
+      system_command "/usr/bin/codesign",
+                     args: ["--force", "--deep", "--sign", "-", "#{bin}/rocksdb_server"],
+                     sudo: true
+    end
   end
 
   service do
-      run [opt_bin/"rocksdb_server"]
-      keep_alive true
-      working_dir var
-      log_path var/"log/rocksdb_server.log"
-      error_log_path var/"log/rocksdb_server.log"
-      run_type :immediate
-    end
+    run [opt_bin/"rocksdb_server"]
+    keep_alive true
+    working_dir var
+    log_path var/"log/rocksdb_server.log"
+    error_log_path var/"log/rocksdb_server.log"
+    run_type :immediate
+  end
 
   test do
     system "#{bin}/rocksdb_server", "--version"
   end
+
+  caveats <<~EOS
+    During the installation process, you will be prompted to enter your password.
+    This is necessary to make the binary executable and to self-sign the application
+    using the `xattr` and `codesign` commands to ensure it runs correctly on macOS.
+  EOS
 end
