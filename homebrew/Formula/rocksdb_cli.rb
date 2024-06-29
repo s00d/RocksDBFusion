@@ -45,9 +45,11 @@ class RocksdbCli < Formula
     system "#{bin}/rocksdb_cli", "--version"
   end
 
-  caveats <<~EOS
-    During the installation process, you will be prompted to enter your password.
-    This is necessary to make the binary executable and to self-sign the application
-    using the `xattr` and `codesign` commands to ensure it runs correctly on macOS.
-  EOS
+  def caveats
+      <<~EOS
+        During the installation process, you will be prompted to enter your password.
+        This is necessary to make the binary executable and to self-sign the application
+        using the `xattr` and `codesign` commands to ensure it runs correctly on macOS.
+      EOS
+    end
 end
