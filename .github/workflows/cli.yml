@@ -1,0 +1,136 @@
+name: Build and Release CLI Client
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Release - ${{ matrix.platform.release_for }}
+    runs-on: ${{ matrix.platform.os }}
+    continue-on-error: true
+
+    strategy:
+      matrix:
+        platform:
+          - release_for: Linux-aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+            bin: rocksdb_cli
+            name: rocksdb_cli-Linux-aarch64-musl.tar.gz
+            command: build
+
+          - release_for: Linux-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+            bin: rocksdb_cli
+            name: rocksdb_cli-Linux-x86_64-musl.tar.gz
+            command: build
+
+          - release_for: Linux-i686
+            os: ubuntu-20.04
+            target: i686-unknown-linux-musl
+            bin: rocksdb_cli
+            name: rocksdb_cli-Linux-i686-musl.tar.gz
+            command: build
+
+          - release_for: Windows-aarch64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bin: rocksdb_cli.exe
+            name: rocksdb_cli-Windows-aarch64.zip
+            command: build
+
+          - release_for: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: rocksdb_cli.exe
+            name: rocksdb_cli-Windows-x86_64.zip
+            command: build
+
+          - release_for: macOS-x86_64
+            os: macOS-latest
+            target: x86_64-apple-darwin
+            bin: rocksdb_cli
+            name: rocksdb_cli-Darwin-x86_64.tar.gz
+            command: build
+
+          - release_for: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: rocksdb_cli
+            name: rocksdb_cli-Darwin-aarch64.tar.gz
+            command: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            C:\Users\runneradmin\.cargo\registry\index\
+            C:\Users\runneradmin\.cargo\registry\cache\
+            C:\Users\runneradmin\.cargo\git\db\
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.platform.target }}
+
+      - name: Install dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          sudo ln -s /usr/bin/musl-gcc /usr/local/bin/x86_64-linux-musl-gcc
+          sudo ln -s /usr/bin/musl-gcc /usr/local/bin/musl-gcc
+
+      - name: Get version
+        if: runner.os != 'Windows'
+        id: version
+        run: echo "version=$(grep '^version =' rocksdb-cli/Cargo.toml | sed 's/version = \"\(.*\)\"/\1/')" >> $GITHUB_ENV
+
+      - name: Get version (Windows)
+        if: runner.os == 'Windows'
+        id: version-win
+        run: |
+          $content = Get-Content -Path rocksdb-cli/Cargo.toml
+          $version = $content | Select-String -Pattern '^version\s*=\s*"(.*)"' | ForEach-Object { $_.Matches.Groups[1].Value }
+          echo "version=$version" >> $Env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Build binary
+        uses: s00d/actions-rust-cross@v0.14
+        with:
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release --manifest-path=rocksdb-cli/Cargo.toml"
+          strip: true
+
+      - name: Package as archive
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          else
+            tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          fi
+          cd -
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: rocksdb-cli-v${{ env.version }}
+          name: CLI Client Release ${{ env.version }}
+          draft: true
+          prerelease: false
+          files: "rocksdb_cli-*"
+          body_path: Changes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
