@@ -41,6 +41,20 @@ tar -xzf rocksdb_cli-<platform>.tar.gz  # For Linux and macOS
 7z x rocksdb_cli-<platform>.zip         # For Windows
 ```
 
+### Install with Homebrew (macOS)
+
+You can also install RocksDB CLI Client using Homebrew on macOS. First, make sure to tap the repository:
+
+```sh
+brew tap s00d/rocksdbserver
+```
+
+Then, install the RocksDB CLI Client:
+
+```sh
+brew install rocksdb_cli
+```
+
 ### Run the Application
 
 Navigate to the directory where the binary is extracted and run the application:

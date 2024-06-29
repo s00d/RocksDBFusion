@@ -66,6 +66,20 @@ Pre-built versions of the application are available in the [Releases](https://gi
 
 For the specific version mentioned, you can download it from [this link](https://github.com/s00d/RocksDBFusion/releases/tag/app-v0.0.1).
 
+### Install with Homebrew (macOS)
+
+You can also install RocksDB Viewer using Homebrew on macOS. First, make sure to tap the repository:
+
+```sh
+brew tap s00d/rocksdbserver
+```
+
+Then, install the RocksDB Viewer application:
+
+```sh
+brew install --cask rocksdb-viewer
+```
+
 ## How It Works
 
 The RocksDB Viewer is a Tauri application designed to connect to a RocksDB server and exchange data over a TCP connection. The application uses a Rust backend to handle the communication with the server and a Vue.js frontend to provide a user-friendly interface for viewing and interacting with the data.
