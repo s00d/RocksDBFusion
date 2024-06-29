@@ -1,5 +1,5 @@
 [workspace]
-members = ["server", "rocksdb-client-rust"]
+members = ["server", "rocksdb-client-rust", "rocksdb-cli"]
 exclude = ["rocksdb-viewer"]
 resolver = "2"
 

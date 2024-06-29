@@ -1,13 +1,7 @@
 use std::collections::HashMap;
-use tokio::runtime::Runtime;
-use bytes::Bytes;
-use futures::SinkExt;
-use futures::StreamExt;
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpStream;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::net::TcpStream;
-use tokio::sync::Mutex;
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -34,7 +28,7 @@ pub struct Response {
 pub struct RequestHandler {
     host: String,
     port: u16,
-    connection: Arc<Mutex<Option<Framed<TcpStream, LengthDelimitedCodec>>>>,
+    connection: Option<TcpStream>,
 }
 
 impl RequestHandler {
@@ -42,48 +36,31 @@ impl RequestHandler {
         Self {
             host,
             port,
-            connection: Arc::new(Mutex::new(None)),
+            connection: None,
         }
     }
 
-    async fn get_connection(
-        &self,
-    ) -> Result<Arc<Mutex<Framed<TcpStream, LengthDelimitedCodec>>>, String> {
-        let mut conn = self.connection.lock().await;
-        if conn.is_none() {
+    fn get_connection(&mut self) -> Result<&mut TcpStream, String> {
+        if self.connection.is_none() {
             let addr = format!("{}:{}", self.host, self.port);
-            let stream = TcpStream::connect(&addr)
-                .await
-                .map_err(|e| format!("Connection error: {}", e))?;
-            let framed = Framed::new(stream, LengthDelimitedCodec::new());
-            *conn = Some(framed);
+            let stream = TcpStream::connect(&addr).map_err(|e| format!("Connection error: {}", e))?;
+            self.connection = Some(stream);
         }
-
-        if let Some(framed) = conn.take() {
-            Ok(Arc::new(Mutex::new(framed)))
-        } else {
-            Err("Failed to acquire connection".to_string())
-        }
+        self.connection.as_mut().ok_or_else(|| "Failed to acquire connection".to_string())
     }
 
-    pub async fn send_request(&self, request: Request) -> Result<Response, String> {
-        let connection = self.get_connection().await?;
-        let mut conn = connection.lock().await;
+    pub fn send_request(&mut self, request: Request) -> Result<Response, String> {
+        let conn = self.get_connection()?;
 
-        let request_bytes =
-            serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
-        conn.send(Bytes::from(request_bytes))
-            .await
-            .map_err(|e| format!("Send error: {}", e))?;
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
+        conn.write_all(&request_bytes).map_err(|e| format!("Send error: {}", e))?;
+        conn.write_all(b"\n").map_err(|e| format!("Send error: {}", e))?;
 
-        let response_bytes = match conn.next().await {
-            Some(Ok(bytes)) => bytes,
-            Some(Err(e)) => return Err(format!("Receive error: {}", e)),
-            None => return Err("Receive error: no response received".to_string()),
-        };
+        let mut reader = BufReader::new(conn);
+        let mut response_bytes = Vec::new();
+        reader.read_until(b'\n', &mut response_bytes).map_err(|e| format!("Receive error: {}", e))?;
 
-        let response: Response = serde_json::from_slice(&response_bytes)
-            .map_err(|e| format!("Deserialization error: {}", e))?;
+        let response: Response = serde_json::from_slice(&response_bytes).map_err(|e| format!("Deserialization error: {}", e))?;
         Ok(response)
     }
 
@@ -159,7 +136,7 @@ impl RequestBuilder {
         self.request.iterator_id = iterator_id;
         self
     }
-    
+
     pub fn txn(mut self, txn: Option<bool>) -> Self {
         self.request.txn = txn;
         self
@@ -189,5 +166,5 @@ impl RocksDBClient {
         }
     }
 
-        {{{methods}}}
+{{{methods}}}
 }

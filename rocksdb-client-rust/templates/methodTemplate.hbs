@@ -1,4 +1,4 @@
-    pub fn {{actionSnake}}(&self, {{{parametersList}}}) -> Result<{{{returnType}}}, String> {
+    pub fn {{actionSnake}}(&mut self, {{{parametersList}}}) -> Result<{{{returnType}}}, String> {
         let request = RequestBuilder::new("{{action}}")
             {{#each parameters}}
             {{#if inOptions}}
@@ -17,10 +17,6 @@
             {{/each}}
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }

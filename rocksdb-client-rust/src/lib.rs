@@ -1,13 +1,7 @@
 use std::collections::HashMap;
-use tokio::runtime::Runtime;
-use bytes::Bytes;
-use futures::SinkExt;
-use futures::StreamExt;
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpStream;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::net::TcpStream;
-use tokio::sync::Mutex;
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -34,7 +28,7 @@ pub struct Response {
 pub struct RequestHandler {
     host: String,
     port: u16,
-    connection: Arc<Mutex<Option<Framed<TcpStream, LengthDelimitedCodec>>>>,
+    connection: Option<TcpStream>,
 }
 
 impl RequestHandler {
@@ -42,48 +36,31 @@ impl RequestHandler {
         Self {
             host,
             port,
-            connection: Arc::new(Mutex::new(None)),
+            connection: None,
         }
     }
 
-    async fn get_connection(
-        &self,
-    ) -> Result<Arc<Mutex<Framed<TcpStream, LengthDelimitedCodec>>>, String> {
-        let mut conn = self.connection.lock().await;
-        if conn.is_none() {
+    fn get_connection(&mut self) -> Result<&mut TcpStream, String> {
+        if self.connection.is_none() {
             let addr = format!("{}:{}", self.host, self.port);
-            let stream = TcpStream::connect(&addr)
-                .await
-                .map_err(|e| format!("Connection error: {}", e))?;
-            let framed = Framed::new(stream, LengthDelimitedCodec::new());
-            *conn = Some(framed);
+            let stream = TcpStream::connect(&addr).map_err(|e| format!("Connection error: {}", e))?;
+            self.connection = Some(stream);
         }
-
-        if let Some(framed) = conn.take() {
-            Ok(Arc::new(Mutex::new(framed)))
-        } else {
-            Err("Failed to acquire connection".to_string())
-        }
+        self.connection.as_mut().ok_or_else(|| "Failed to acquire connection".to_string())
     }
 
-    pub async fn send_request(&self, request: Request) -> Result<Response, String> {
-        let connection = self.get_connection().await?;
-        let mut conn = connection.lock().await;
+    pub fn send_request(&mut self, request: Request) -> Result<Response, String> {
+        let conn = self.get_connection()?;
 
-        let request_bytes =
-            serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
-        conn.send(Bytes::from(request_bytes))
-            .await
-            .map_err(|e| format!("Send error: {}", e))?;
+        let request_bytes = serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
+        conn.write_all(&request_bytes).map_err(|e| format!("Send error: {}", e))?;
+        conn.write_all(b"\n").map_err(|e| format!("Send error: {}", e))?;
 
-        let response_bytes = match conn.next().await {
-            Some(Ok(bytes)) => bytes,
-            Some(Err(e)) => return Err(format!("Receive error: {}", e)),
-            None => return Err("Receive error: no response received".to_string()),
-        };
+        let mut reader = BufReader::new(conn);
+        let mut response_bytes = Vec::new();
+        reader.read_until(b'\n', &mut response_bytes).map_err(|e| format!("Receive error: {}", e))?;
 
-        let response: Response = serde_json::from_slice(&response_bytes)
-            .map_err(|e| format!("Deserialization error: {}", e))?;
+        let response: Response = serde_json::from_slice(&response_bytes).map_err(|e| format!("Deserialization error: {}", e))?;
         Ok(response)
     }
 
@@ -95,6 +72,7 @@ impl RequestHandler {
         }
     }
 }
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RequestBuilder {
@@ -159,7 +137,7 @@ impl RequestBuilder {
         self.request.iterator_id = iterator_id;
         self
     }
-    
+
     pub fn txn(mut self, txn: Option<bool>) -> Self {
         self.request.txn = txn;
         self
@@ -189,7 +167,7 @@ impl RocksDBClient {
         }
     }
 
-            pub fn put(&self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
+    pub fn put(&mut self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("put")
             .key(Some(key))
             .value(Some(value))
@@ -197,15 +175,11 @@ impl RocksDBClient {
             .txn(txn)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn get(&self, key: String, cf_name: Option<String>, default_value: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
+    pub fn get(&mut self, key: String, cf_name: Option<String>, default_value: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("get")
             .key(Some(key))
             .cf_name(cf_name)
@@ -213,30 +187,23 @@ impl RocksDBClient {
             .txn(txn)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
 
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn delete(&self, key: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
+    pub fn delete(&mut self, key: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("delete")
             .key(Some(key))
             .cf_name(cf_name)
             .txn(txn)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn merge(&self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
+    pub fn merge(&mut self, key: String, value: String, cf_name: Option<String>, txn: Option<bool>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("merge")
             .key(Some(key))
             .value(Some(value))
@@ -244,337 +211,232 @@ impl RocksDBClient {
             .txn(txn)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn get_property(&self, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
+    pub fn get_property(&mut self, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("get_property")
             .value(Some(value))
             .cf_name(cf_name)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn keys(&self, start: String, limit: String, query: Option<String>) -> Result<Option<String>, String> {
+    pub fn keys(&mut self, start: String, limit: String, query: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("keys")
-                .option("start".to_string(), start.to_string())
-                .option("limit".to_string(), limit.to_string())
-                .option("query".to_string(), query.unwrap().to_string())
+            .option("start".to_string(), start)
+            .option("limit".to_string(), limit)
+            .option("query".to_string(), query.unwrap_or_default())
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn all(&self, query: Option<String>) -> Result<Option<String>, String> {
+    pub fn all(&mut self, query: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("all")
-                .option("query".to_string(), query.unwrap().to_string())
+            .option("query".to_string(), query.unwrap_or_default())
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn list_column_families(&self, ) -> Result<Option<String>, String> {
+    pub fn list_column_families(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("list_column_families")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn create_column_family(&self, cf_name: String) -> Result<Option<String>, String> {
+    pub fn create_column_family(&mut self, cf_name: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("create_column_family")
             .cf_name(Some(cf_name))
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn drop_column_family(&self, cf_name: String) -> Result<Option<String>, String> {
+    pub fn drop_column_family(&mut self, cf_name: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("drop_column_family")
             .cf_name(Some(cf_name))
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn compact_range(&self, start: Option<String>, end: Option<String>, cf_name: Option<String>) -> Result<Option<String>, String> {
+    pub fn compact_range(&mut self, start: Option<String>, end: Option<String>, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("compact_range")
-                .option("start".to_string(), start.unwrap().to_string())
-                .option("end".to_string(), end.unwrap().to_string())
+            .option("start".to_string(), start.unwrap_or_default())
+            .option("end".to_string(), end.unwrap_or_default())
             .cf_name(cf_name)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn write_batch_put(&self, key: String, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
+    pub fn write_batch_put(&mut self, key: String, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_put")
             .key(Some(key))
             .value(Some(value))
             .cf_name(cf_name)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn write_batch_merge(&self, key: String, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
+    pub fn write_batch_merge(&mut self, key: String, value: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_merge")
             .key(Some(key))
             .value(Some(value))
             .cf_name(cf_name)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn write_batch_delete(&self, key: String, cf_name: Option<String>) -> Result<Option<String>, String> {
+    pub fn write_batch_delete(&mut self, key: String, cf_name: Option<String>) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_delete")
             .key(Some(key))
             .cf_name(cf_name)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn write_batch_write(&self, ) -> Result<Option<String>, String> {
+    pub fn write_batch_write(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_write")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn write_batch_clear(&self, ) -> Result<Option<String>, String> {
+    pub fn write_batch_clear(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_clear")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn write_batch_destroy(&self, ) -> Result<Option<String>, String> {
+    pub fn write_batch_destroy(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("write_batch_destroy")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn create_iterator(&self, ) -> Result<Option<String>, String> {
+    pub fn create_iterator(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("create_iterator")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn destroy_iterator(&self, iterator_id: String) -> Result<Option<String>, String> {
+    pub fn destroy_iterator(&mut self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("destroy_iterator")
-                .option("iterator_id".to_string(), iterator_id.to_string())
+            .option("iterator_id".to_string(), iterator_id)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn iterator_seek(&self, iterator_id: String, key: String) -> Result<Option<String>, String> {
+    pub fn iterator_seek(&mut self, iterator_id: String, key: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_seek")
-                .option("iterator_id".to_string(), iterator_id.to_string())
+            .option("iterator_id".to_string(), iterator_id)
             .key(Some(key))
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn iterator_next(&self, iterator_id: String) -> Result<Option<String>, String> {
+    pub fn iterator_next(&mut self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_next")
-                .option("iterator_id".to_string(), iterator_id.to_string())
+            .option("iterator_id".to_string(), iterator_id)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn iterator_prev(&self, iterator_id: String) -> Result<Option<String>, String> {
+    pub fn iterator_prev(&mut self, iterator_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("iterator_prev")
-                .option("iterator_id".to_string(), iterator_id.to_string())
+            .option("iterator_id".to_string(), iterator_id)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn backup(&self, ) -> Result<Option<String>, String> {
+    pub fn backup(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("backup")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn restore_latest(&self, ) -> Result<Option<String>, String> {
+    pub fn restore_latest(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("restore_latest")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn restore(&self, backup_id: String) -> Result<Option<String>, String> {
+    pub fn restore(&mut self, backup_id: String) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("restore")
-                .option("backup_id".to_string(), backup_id.to_string())
+            .option("backup_id".to_string(), backup_id)
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn get_backup_info(&self, ) -> Result<Option<String>, String> {
+    pub fn get_backup_info(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("get_backup_info")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn begin_transaction(&self, ) -> Result<Option<String>, String> {
+    pub fn begin_transaction(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("begin_transaction")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn commit_transaction(&self, ) -> Result<Option<String>, String> {
+    pub fn commit_transaction(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("commit_transaction")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
 
-    pub fn rollback_transaction(&self, ) -> Result<Option<String>, String> {
+    pub fn rollback_transaction(&mut self) -> Result<Option<String>, String> {
         let request = RequestBuilder::new("rollback_transaction")
             .build();
 
-        let response = Runtime::new()
-            .unwrap()
-            .block_on(self.request_handler.send_request(request))
-            .map_err(|e| format!("Error sending request: {}", e))?;
-
+        let response = self.request_handler.send_request(request)?;
         self.request_handler.handle_response(response)
     }
-
 }

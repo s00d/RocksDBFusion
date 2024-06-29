@@ -1,0 +1,10 @@
+[package]
+name = "rocksdb_cli"
+version = "0.1.1"
+edition = "2021"
+
+[dependencies]
+rocksdb-client-rust = { version = "*", path = "../rocksdb-client-rust" }
+structopt = "0.3"
+log = "0.4.21"
+

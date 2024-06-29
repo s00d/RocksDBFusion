@@ -200,10 +200,10 @@ async fn handle_connection(
 
     while reader.read_until(b'\n', &mut buffer).await? != 0 {
         let request_str = String::from_utf8_lossy(&buffer);
-        println!("Received request: {}", request_str);
+        info!("Received request: {}", request_str);
 
         if buffer.starts_with(b"GET /favicon.ico") {
-            println!("Ignoring /favicon.ico request");
+            info!("Ignoring /favicon.ico request");
             return Ok(());
         }
 
