@@ -26,40 +26,85 @@ jobs:
         run: mkdir -p homebrew-tap/Formula
 
       - name: Copy formula to Homebrew Tap
-        run: cp homebrew/Formula/rocksdb_server.rb homebrew-tap/Formula/
+        run: |
+          cp homebrew/Formula/rocksdb_server.rb homebrew-tap/Formula/
+          cp homebrew/Formula/rocksdb_cli.rb homebrew-tap/Formula/
+          cp homebrew/Casks/rocksdb-viewer.rb homebrew-tap/Casks/
 
       - name: List files in Homebrew Tap directory
-        run: ls -l homebrew-tap/Formula/
+        run: ls -l homebrew-tap/Formula/ && ls -l homebrew-tap/Casks/
 
       - name: Calculate SHA256 checksums and set version
         id: sha256
         run: |
           VERSION=$(grep '^version =' server/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          CLI_VERSION=$(grep '^version =' rocksdb-cli/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          APP_VERSION=$(jq -r '.package.version' rocksdb-viewer/src-tauri/tauri.conf.json)
+          
           MACOS_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-x86_64.tar.gz"
           MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Darwin-aarch64.tar.gz"
           LINUX_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-x86_64-musl.tar.gz"
           LINUX_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/server-v${VERSION}/rocksdb_server-Linux-aarch64-musl.tar.gz"
+
+          CLI_MACOS_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/rocksdb-cli-v${CLI_VERSION}/rocksdb_cli-Darwin-x86_64.tar.gz"
+          CLI_MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/rocksdb-cli-v${CLI_VERSION}/rocksdb_cli-Darwin-aarch64.tar.gz"
+          CLI_LINUX_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/rocksdb-cli-v${CLI_VERSION}/rocksdb_cli-Linux-x86_64-musl.tar.gz"
+          CLI_LINUX_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/rocksdb-cli-v${CLI_VERSION}/rocksdb_cli-Linux-aarch64-musl.tar.gz"
+
+          APP_MACOS_X86_64_URL="https://github.com/s00d/RocksDBFusion/releases/download/app-v${APP_VERSION}/rocksdb-viewer_${APP_VERSION}_x64.dmg"
+          APP_MACOS_AARCH64_URL="https://github.com/s00d/RocksDBFusion/releases/download/app-v${APP_VERSION}/rocksdb-viewer_${APP_VERSION}_aarch64.dmg"
 
           MACOS_X86_64_SHA256=$(curl -L $MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
           MACOS_AARCH64_SHA256=$(curl -L $MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
           LINUX_X86_64_SHA256=$(curl -L $LINUX_X86_64_URL | shasum -a 256 | awk '{print $1}')
           LINUX_AARCH64_SHA256=$(curl -L $LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
 
+          CLI_MACOS_X86_64_SHA256=$(curl -L $CLI_MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
+          CLI_MACOS_AARCH64_SHA256=$(curl -L $CLI_MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+          CLI_LINUX_X86_64_SHA256=$(curl -L $CLI_LINUX_X86_64_URL | shasum -a 256 | awk '{print $1}')
+          CLI_LINUX_AARCH64_SHA256=$(curl -L $CLI_LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+
+          APP_MACOS_X86_64_SHA256=$(curl -L $APP_MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
+          APP_MACOS_AARCH64_SHA256=$(curl -L $APP_MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
           echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256" >> $GITHUB_ENV
           echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256" >> $GITHUB_ENV
           echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256" >> $GITHUB_ENV
           echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256" >> $GITHUB_ENV
 
+          echo "CLI_MACOS_X86_64_SHA256=$CLI_MACOS_X86_64_SHA256" >> $GITHUB_ENV
+          echo "CLI_MACOS_AARCH64_SHA256=$CLI_MACOS_AARCH64_SHA256" >> $GITHUB_ENV
+          echo "CLI_LINUX_X86_64_SHA256=$CLI_LINUX_X86_64_SHA256" >> $GITHUB_ENV
+          echo "CLI_LINUX_AARCH64_SHA256=$CLI_LINUX_AARCH64_SHA256" >> $GITHUB_ENV
+
+          echo "APP_MACOS_X86_64_SHA256=$APP_MACOS_X86_64_SHA256" >> $GITHUB_ENV
+          echo "APP_MACOS_AARCH64_SHA256=$APP_MACOS_AARCH64_SHA256" >> $GITHUB_ENV
+
           # Отладочный вывод
+          echo "VERSION=$VERSION"
+          echo "CLI_VERSION=$CLI_VERSION"
+          echo "APP_VERSION=$APP_VERSION"
+
           echo "MACOS_X86_64_SHA256=$MACOS_X86_64_SHA256"
           echo "MACOS_AARCH64_SHA256=$MACOS_AARCH64_SHA256"
           echo "LINUX_X86_64_SHA256=$LINUX_X86_64_SHA256"
           echo "LINUX_AARCH64_SHA256=$LINUX_AARCH64_SHA256"
-          echo "VERSION=$VERSION"
+
+          echo "CLI_MACOS_X86_64_SHA256=$CLI_MACOS_X86_64_SHA256"
+          echo "CLI_MACOS_AARCH64_SHA256=$CLI_MACOS_AARCH64_SHA256"
+          echo "CLI_LINUX_X86_64_SHA256=$CLI_LINUX_X86_64_SHA256"
+          echo "CLI_LINUX_AARCH64_SHA256=$CLI_LINUX_AARCH64_SHA256"
+
+          echo "APP_MACOS_X86_64_SHA256=$APP_MACOS_X86_64_SHA256"
+          echo "APP_MACOS_AARCH64_SHA256=$APP_MACOS_AARCH64_SHA256"
 
       - name: Update Homebrew Formula
         run: |
+          # Update rocksdb_server.rb formula
           FORMULA_FILE="homebrew-tap/Formula/rocksdb_server.rb"
           VERSION=${{ env.VERSION }}
           MACOS_X86_64_SHA256=${{ env.MACOS_X86_64_SHA256 }}
@@ -75,8 +120,38 @@ jobs:
           sed -i "s|{LINUX_X86_64_SHA256}|${LINUX_X86_64_SHA256}|g" "$FORMULA_FILE"
           sed -i "s|{LINUX_AARCH64_SHA256}|${LINUX_AARCH64_SHA256}|g" "$FORMULA_FILE"
 
+          # Update rocksdb_cli.rb formula
+          CLI_FORMULA_FILE="homebrew-tap/Formula/rocksdb_cli.rb"
+          CLI_VERSION=${{ env.CLI_VERSION }}
+          CLI_MACOS_X86_64_SHA256=${{ env.CLI_MACOS_X86_64_SHA256 }}
+          CLI_MACOS_AARCH64_SHA256=${{ env.CLI_MACOS_AARCH64_SHA256 }}
+          CLI_LINUX_X86_64_SHA256=${{ env.CLI_LINUX_X86_64_SHA256 }}
+          CLI_LINUX_AARCH64_SHA256=${{ env.CLI_LINUX_AARCH64_SHA256 }}
+
+          echo "Updating formula at $CLI_FORMULA_FILE with version $CLI_VERSION"
+
+          sed -i "s|{VERSION}|${CLI_VERSION}|g" "$CLI_FORMULA_FILE"
+          sed -i "s|{MACOS_X86_64_SHA256}|${CLI_MACOS_X86_64_SHA256}|g" "$CLI_FORMULA_FILE"
+          sed -i "s|{MACOS_AARCH64_SHA256}|${CLI_MACOS_AARCH64_SHA256}|g" "$CLI_FORMULA_FILE"
+          sed -i "s|{LINUX_X86_64_SHA256}|${CLI_LINUX_X86_64_SHA256}|g" "$CLI_FORMULA_FILE"
+          sed -i "s|{LINUX_AARCH64_SHA256}|${CLI_LINUX_AARCH64_SHA256}|g" "$CLI_FORMULA_FILE"
+
+          # Update rocksdb-viewer.rb cask
+          CASK_FILE="homebrew-tap/Casks/rocksdb-viewer.rb"
+          APP_VERSION=${{ env.APP_VERSION }}
+          APP_MACOS_X86_64_SHA256=${{ env.APP_MACOS_X86_64_SHA256 }}
+          APP_MACOS_AARCH64_SHA256=${{ env.APP_MACOS_AARCH64_SHA256 }}
+
+          echo "Updating cask at $CASK_FILE with version $APP_VERSION"
+
+          sed -i "s|{VERSION}|${APP_VERSION}|g" "$CASK_FILE"
+          sed -i "s|{MACOS_X86_64_SHA256}|${APP_MACOS_X86_64_SHA256}|g" "$CASK_FILE"
+          sed -i "s|{MACOS_AARCH64_SHA256}|${APP_MACOS_AARCH64_SHA256}|g" "$CASK_FILE"
+
           git -C homebrew-tap config user.name "github-actions"
           git -C homebrew-tap config user.email "github-actions@github.com"
           git -C homebrew-tap add Formula/rocksdb_server.rb
-          git -C homebrew-tap commit -m "Update Homebrew formula for version $VERSION"
+          git -C homebrew-tap add Formula/rocksdb_cli.rb
+          git -C homebrew-tap add Casks/rocksdb-viewer.rb
+          git -C homebrew-tap commit -m "Update Homebrew formula for version $VERSION, CLI version $CLI_VERSION, and App version $APP_VERSION"
           git -C homebrew-tap push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/s00d/homebrew-rocksdbserver.git main
