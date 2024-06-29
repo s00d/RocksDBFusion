@@ -31,4 +31,10 @@ cask "rocksdb-viewer" do
     "~/Library/Preferences/com.rocksdb.viewer.plist",
     "~/Library/Saved Application State/com.rocksdb.viewer.savedState",
   ]
+
+  caveats <<~EOS
+    During the installation process, you will be prompted to enter your password.
+    This is necessary to clear extended attributes and to self-sign the application
+    using the `xattr` and `codesign` commands to ensure it runs correctly on macOS.
+  EOS
 end
