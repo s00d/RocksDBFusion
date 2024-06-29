@@ -23,7 +23,9 @@ jobs:
           token: ${{ secrets.GH_TOKEN }}
 
       - name: Create Formula Directory if it does not exist
-        run: mkdir -p homebrew-tap/Formula
+        run: |
+          mkdir -p homebrew-tap/Formula
+          mkdir -p homebrew-tap/Casks
 
       - name: Copy formula to Homebrew Tap
         run: |
