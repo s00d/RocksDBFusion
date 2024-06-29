@@ -119,10 +119,19 @@ The RocksDB server stores its data in the `var/rocksdb/db` directory under the H
 
 ### macOS Sign
 
-```bash
-chmod +x ./server-0.1.2-aarch64-apple-darwin
-xattr -cr ./server-0.1.2-aarch64-apple-darwin && codesign --force --deep --sign - ./server-0.1.2-aarch64-apple-darwin
-```
+If you are on macOS, you may need to sign the application before running it. Here are the steps:
+
+1. Make the binary executable:
+
+    ```bash
+    chmod +x ./server-0.1.2-aarch64-apple-darwin
+    ```
+
+2. Clear extended attributes and sign the binary:
+
+    ```bash
+    xattr -cr ./server-0.1.2-aarch64-apple-darwin && codesign --force --deep --sign - ./server-0.1.2-aarch64-apple-darwin
+    ```
 
 ### Using systemd on Linux
 

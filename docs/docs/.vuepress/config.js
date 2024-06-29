@@ -70,6 +70,11 @@ export default defineUserConfig({
         icon: "fas fa-eye",
       },
       {
+        text: "Cli",
+        link: "/cli",
+        icon: "fas fa-terminal",
+      },
+      {
         text: "Changelog",
         link: "/changelog",
         icon: "fas fa-history",
