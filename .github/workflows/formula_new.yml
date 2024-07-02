@@ -70,7 +70,7 @@ jobs:
       - name: Update Homebrew Formula
         run: |
           # Update rocksdb_server.rb formula
-          FORMULA_FILE="homebrew/Formula/rocksdb_server.rb"
+          FORMULA_FILE="homebrew-formula/r/rocksdb_server.rb"
           VERSION=${{ env.VERSION }}
           MACOS_X86_64_SHA256=${{ env.MACOS_X86_64_SHA256 }}
           MACOS_AARCH64_SHA256=${{ env.MACOS_AARCH64_SHA256 }}
@@ -86,7 +86,7 @@ jobs:
           sed -i "s|{LINUX_AARCH64_SHA256}|${LINUX_AARCH64_SHA256}|g" "$FORMULA_FILE"
 
           # Update rocksdb_cli.rb formula
-          CLI_FORMULA_FILE="homebrew/Formula/rocksdb_cli.rb"
+          CLI_FORMULA_FILE="homebrew-formula/r/rocksdb_cli.rb"
           CLI_VERSION=${{ env.CLI_VERSION }}
           CLI_MACOS_X86_64_SHA256=${{ env.CLI_MACOS_X86_64_SHA256 }}
           CLI_MACOS_AARCH64_SHA256=${{ env.CLI_MACOS_AARCH64_SHA256 }}
@@ -102,7 +102,7 @@ jobs:
           sed -i "s|{LINUX_AARCH64_SHA256}|${CLI_LINUX_AARCH64_SHA256}|g" "$CLI_FORMULA_FILE"
 
           # Update rocksdb-viewer.rb cask
-          CASK_FILE="homebrew/Casks/rocksdb-viewer.rb"
+          CASK_FILE="homebrew-cask/r/rocksdb-viewer.rb"
           APP_VERSION=${{ env.APP_VERSION }}
           APP_MACOS_X86_64_SHA256=${{ env.APP_MACOS_X86_64_SHA256 }}
           APP_MACOS_AARCH64_SHA256=${{ env.APP_MACOS_AARCH64_SHA256 }}
@@ -117,7 +117,15 @@ jobs:
         uses: crazy-max/ghaction-github-pages@v4
         with:
           target_branch: update-formula-branch
-          build_dir: homebrew
+          build_dir: homebrew-formula
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy Docs
+        uses: crazy-max/ghaction-github-pages@v4
+        with:
+          target_branch: update-cask-branch
+          build_dir: homebrew-cask
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
