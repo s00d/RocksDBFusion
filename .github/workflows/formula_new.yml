@@ -1,4 +1,4 @@
-name: Publish Homebrew Formula New
+name: Publish Homebrew Formula
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
           MACOS_X86_64_SHA256=$(curl -L $MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
           MACOS_AARCH64_SHA256=$(curl -L $MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
           LINUX_X86_64_SHA256=$(curl -L $LINUX_X86_64_URL | shasum -a 256 | awk '{print $1}')
-          LINUX_AARCH64_SHA256=$(curl -L $LINUX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
+          LINUX_AARCH64_SHA256=$(curl -L $LINУX_AARCH64_URL | shasum -a 256 | awk '{print $1}')
 
           CLI_MACOS_X86_64_SHA256=$(curl -L $CLI_MACOS_X86_64_URL | shasum -a 256 | awk '{print $1}')
           CLI_MACOS_AARCH64_SHA256=$(curl -L $CLI_MACOS_AARCH64_URL | shasum -a 256 | awk '{print $1}')
@@ -83,7 +83,7 @@ jobs:
           sed -i "s|{MACOS_X86_64_SHA256}|${MACOS_X86_64_SHA256}|g" "$FORMULA_FILE"
           sed -i "s|{MACOS_AARCH64_SHA256}|${MACOS_AARCH64_SHA256}|g" "$FORMULA_FILE"
           sed -i "s|{LINUX_X86_64_SHA256}|${LINUX_X86_64_SHA256}|g" "$FORMULA_FILE"
-          sed -i "s|{LINUX_AARCH64_SHA256}|${LINUX_AARCH64_SHA256}|g" "$FORMULA_FILE"
+          sed -i "s|{LINUX_AARCH64_SHA256}|${LINУX_AARCH64_SHA256}|g" "$FORMULA_FILE"
 
           # Update rocksdb_cli.rb formula
           CLI_FORMULA_FILE="homebrew/Formula/rocksdb_cli.rb"
@@ -117,15 +117,11 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+
+          git checkout -b update-formula-branch
           git add homebrew/Formula/rocksdb_server.rb homebrew/Formula/rocksdb_cli.rb homebrew/Casks/rocksdb-viewer.rb
           git commit -m "Update Homebrew formula for version ${{ env.VERSION }}, CLI version ${{ env.CLI_VERSION }}, and App version ${{ env.APP_VERSION }}"
-
-          # Check if branch exists and create it if it doesn't
-          if git show-ref --quiet refs/heads/update-formula-branch; then
-            git push origin update-formula-branch
-          else
-            git push origin main:update-formula-branch
-          fi
+          git push --set-upstream origin update-formula-branch --force
 
 #      - name: Create Pull Request
 #        uses: peter-evans/create-pull-request@v4
