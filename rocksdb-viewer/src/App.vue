@@ -1,6 +1,36 @@
 <template>
-  <div class="flex h-screen">
-    <SavedConnections v-if="!connected" :savedConnections="savedConnections" @loadConnection="loadConnection" @deleteConnection="deleteConnection" />
+  <div class="flex h-screen bg-gray-200">
+    <div class="absolute top-2 right-2 twilight-language-switcher">
+      <form class="max-w-sm mx-auto">
+
+        <div class="inline-block relative w-25">
+          <select v-model="currentLanguage" @change="changeLanguage" class="block appearance-none w-full bg-white border border-gray-400 hover:border-gray-500 px-4 py-2 pr-8 rounded shadow leading-tight focus:outline-none focus:shadow-outline">
+              <option value="en">English</option>
+              <option value="ru">Русский</option>
+              <option value="es">Español</option>
+              <option value="zh">中文</option>
+              <option value="hi">हिन्दी</option>
+              <option value="ar">العربية</option>
+              <option value="pt">Português</option>
+              <option value="bn">বাংলা</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+              <option value="fr">Français</option>
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+          </div>
+        </div>
+      </form>
+    </div>
+    <!-- Saved Connections Sidebar -->
+    <SavedConnections
+      v-if="!connected"
+      :savedConnections="savedConnections"
+      @loadConnection="loadConnection"
+      @deleteConnection="deleteConnection"
+    />
+    <!-- Connection Form -->
     <ConnectForm
       v-if="!connected"
       :connection.sync="connection"
@@ -9,15 +39,31 @@
       @connect="connect"
       @saveConnection="saveConnection"
     />
-    <KeyValueManager v-else :keys="keys" :selectedKey="selectedKey" :value.sync="value" :loadingKeys="loadingKeys" :loadingValue="loadingValue" @updateSearchQuery="updateSearchQuery" @fetchKeys="fetchKeys" @selectKey="selectKey" @saveValue="saveValue" @deleteKey="deleteKey" @disconnect="disconnect" />
+    <!-- Key-Value Manager -->
+    <KeyValueManager
+      v-else
+      :keys="keys"
+      :selectedKey="selectedKey"
+      :value.sync="value"
+      :loadingKeys="loadingKeys"
+      :loadingValue="loadingValue"
+      @updateSearchQuery="updateSearchQuery"
+      @fetchKeys="fetchKeys"
+      @selectKey="selectKey"
+      @saveValue="saveValue"
+      @deleteKey="deleteKey"
+      @disconnect="disconnect"
+    />
   </div>
 </template>
+
 <script>
 import { invoke } from '@tauri-apps/api/tauri';
 import { toast } from 'vue3-toastify';
 import SavedConnections from './components/SavedConnections.vue';
 import ConnectForm from './components/ConnectForm.vue';
 import KeyValueManager from './components/KeyValueManager.vue';
+import { useI18n } from 'vue-i18n';
 
 export default {
   components: {
@@ -28,7 +74,7 @@ export default {
   data() {
     return {
       connection: {
-        name: 'Default',
+        name: this.$t('defaultConnectionName'),
         host: '127.0.0.1',
         port: 12345,
         token: '',
@@ -54,12 +100,17 @@ export default {
       loadingKeys: false,
       loadingValue: false,
       hasMore: true,
+      currentLanguage: 'en'
     };
   },
   methods: {
+    changeLanguage() {
+      this.$i18n.locale = this.currentLanguage;
+    },
     async connect() {
       this.connecting = true;
       this.connectionError = null;
+
       try {
         const { host, port, token, sshHost, sshUser, sshPassword, sshPort, usePassword, useTunnel } = this.connection;
         const ssh_info = useTunnel ? [sshHost, sshUser, sshPassword, sshPort] : null;
@@ -71,9 +122,9 @@ export default {
         });
         this.connected = true;
         this.fetchKeys();
-        toast.success("Connected to server successfully");
+        toast.success(this.$t('connected'));
       } catch (e) {
-        this.connectionError = 'Failed to connect to server: ' + e.message;
+        this.connectionError = this.$t('failedToConnect') + ': ' + e.message;
         toast.error(this.connectionError);
       } finally {
         this.connecting = false;
@@ -81,10 +132,14 @@ export default {
     },
     async disconnect() {
       this.connected = false;
+      this.resetConnection();
+      toast.info(this.$t('disconnected'));
+    },
+    resetConnection() {
       this.connection = {
-        name: 'Default',
-        host: '',
-        port: '',
+        name: this.$t('defaultConnectionName'),
+        host: '127.0.0.1',
+        port: 12345,
         token: '',
         sshHost: '',
         sshUser: '',
@@ -103,7 +158,6 @@ export default {
       this.loadingKeys = false;
       this.loadingValue = false;
       this.hasMore = true;
-      toast.info("Disconnected from server");
     },
     updateSearchQuery(value) {
       this.searchQuery = value;
@@ -132,8 +186,8 @@ export default {
         this.keys = [...this.keys, ...keys];
         this.start += this.limit;
       } catch (e) {
-        console.error('Failed to fetch keys:', e);
-        toast.error('Failed to fetch keys: ' + e.message);
+        console.error(this.$t('failedToFetchKeys') + ':', e);
+        toast.error(this.$t('failedToFetchKeys') + ': ' + e.message);
       } finally {
         this.loadingKeys = false;
       }
@@ -146,8 +200,8 @@ export default {
         try {
           this.value = await invoke('get_value', { key });
         } catch (e) {
-          console.error('Failed to get value:', e);
-          toast.error('Failed to get value: ' + e.message);
+          console.error(this.$t('failedToGetValue') + ':', e);
+          toast.error(this.$t('failedToGetValue') + ': ' + e.message);
         } finally {
           this.loadingValue = false;
         }
@@ -157,10 +211,10 @@ export default {
       if (this.connected && this.selectedKey) {
         try {
           await invoke('put_value', { key: this.selectedKey, value: this.value });
-          toast.success('Value saved successfully');
+          toast.success(this.$t('valueSaved'));
         } catch (e) {
-          console.error('Failed to save value:', e);
-          toast.error('Failed to save value: ' + e.message);
+          console.error(this.$t('failedToSaveValue') + ':', e);
+          toast.error(this.$t('failedToSaveValue') + ': ' + e.message);
         }
       }
     },
@@ -173,17 +227,17 @@ export default {
             this.selectedKey = null;
             this.value = null;
           }
-          toast.success('Key deleted successfully');
+          toast.success(this.$t('keyDeleted'));
         } catch (e) {
-          console.error('Failed to delete key:', e);
-          toast.error('Failed to delete key: ' + e.message);
+          console.error(this.$t('failedToDeleteKey') + ':', e);
+          toast.error(this.$t('failedToDeleteKey') + ': ' + e.message);
         }
       }
     },
     saveConnection(newConnection) {
       this.savedConnections.push(newConnection);
       localStorage.setItem('savedConnections', JSON.stringify(this.savedConnections));
-      toast.success('Connection saved successfully');
+      toast.success(this.$t('connectionSaved'));
     },
     loadConnection(connection) {
       this.connection = { ...connection };
@@ -191,9 +245,38 @@ export default {
     deleteConnection(index) {
       this.savedConnections.splice(index, 1);
       localStorage.setItem('savedConnections', JSON.stringify(this.savedConnections));
-      toast.info('Connection deleted successfully');
+      toast.info(this.$t('connectionDeleted'));
     },
   },
 };
 </script>
 
+<style scoped>
+.loader {
+  border: 16px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 16px solid #3498db;
+  width: 120px;
+  height: 120px;
+  -webkit-animation: spin 2s linear infinite;
+  animation: spin 2s linear infinite;
+}
+
+@-webkit-keyframes spin {
+  0% {
+    -webkit-transform: rotate(0deg);
+  }
+  100% {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+</style>

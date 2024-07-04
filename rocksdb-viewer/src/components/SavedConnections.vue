@@ -1,6 +1,6 @@
 <template>
-  <div class="w-1/3 border-r p-4 bg-white shadow-lg">
-    <h2 class="text-xl mb-4">Saved Connections</h2>
+  <div class="w-1/4 border-r p-2 bg-white shadow-2xl rounded-l-lg">
+    <h2 class="text-xl mb-4">{{ $t('savedConnections') }}</h2>
     <ul>
       <li v-for="(connection, index) in savedConnections" :key="index" class="mb-2">
         <button @click="$emit('loadConnection', connection)" class="w-full flex justify-between items-center p-2 bg-gray-100 hover:bg-gray-200 rounded">
@@ -14,7 +14,6 @@
   </div>
 </template>
 
-
 <script>
 export default {
   props: {
@@ -22,3 +21,7 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+/* Add any additional styles if necessary */
+</style>
