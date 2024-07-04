@@ -1,16 +1,19 @@
 <template>
   <div class="flex h-screen">
     <SavedConnections v-if="!connected" :savedConnections="savedConnections" @loadConnection="loadConnection" @deleteConnection="deleteConnection" />
-    <ConnectForm v-if="!connected" :connected="connected" :connectionError="connectionError" @connect="connect" @saveConnection="saveConnection" />
+    <ConnectForm
+      v-if="!connected"
+      :connection.sync="connection"
+      :connected="connected"
+      :connectionError="connectionError"
+      @connect="connect"
+      @saveConnection="saveConnection"
+    />
     <KeyValueManager v-else :keys="keys" :selectedKey="selectedKey" :value.sync="value" :loadingKeys="loadingKeys" :loadingValue="loadingValue" @updateSearchQuery="updateSearchQuery" @fetchKeys="fetchKeys" @selectKey="selectKey" @saveValue="saveValue" @deleteKey="deleteKey" @disconnect="disconnect" />
-
-
   </div>
 </template>
-
 <script>
 import { invoke } from '@tauri-apps/api/tauri';
-import { open } from '@tauri-apps/api/dialog';
 import { toast } from 'vue3-toastify';
 import SavedConnections from './components/SavedConnections.vue';
 import ConnectForm from './components/ConnectForm.vue';
@@ -24,17 +27,20 @@ export default {
   },
   data() {
     return {
-      name: 'Default',
-      address: '127.0.0.1:12345',
-      token: '',
-      sshHost: '',
-      sshUser: '',
-      sshPassword: '',
-      sshPort: 22,
-      usePassword: false,
-      useTunnel: false,
-      useSSL: false,
-      certificate: null,
+      connection: {
+        name: 'Default',
+        host: '127.0.0.1',
+        port: 12345,
+        token: '',
+        sshHost: '',
+        sshUser: '',
+        sshPassword: '',
+        sshPort: 22,
+        usePassword: false,
+        useTunnel: false,
+        useSSL: false,
+        certificate: null,
+      },
       connected: false,
       connecting: false,
       connectionError: null,
@@ -55,10 +61,12 @@ export default {
       this.connecting = true;
       this.connectionError = null;
       try {
-        const ssh_info = this.useTunnel ? [this.sshHost, this.sshUser, this.sshPassword, this.sshPort] : null;
+        const { host, port, token, sshHost, sshUser, sshPassword, sshPort, usePassword, useTunnel } = this.connection;
+        const ssh_info = useTunnel ? [sshHost, sshUser, sshPassword, sshPort] : null;
         await invoke('connect_to_server', {
-          address: this.address,
-          token: this.usePassword ? this.token : null,
+          host,
+          port,
+          token: usePassword ? token : null,
           ssh_info
         });
         this.connected = true;
@@ -73,16 +81,20 @@ export default {
     },
     async disconnect() {
       this.connected = false;
-      this.address = '';
-      this.token = '';
-      this.sshHost = '';
-      this.sshUser = '';
-      this.sshPassword = '';
-      this.sshPort = 22;
-      this.usePassword = false;
-      this.useTunnel = false;
-      this.useSSL = false;
-      this.certificate = null;
+      this.connection = {
+        name: 'Default',
+        host: '',
+        port: '',
+        token: '',
+        sshHost: '',
+        sshUser: '',
+        sshPassword: '',
+        sshPort: 22,
+        usePassword: false,
+        useTunnel: false,
+        useSSL: false,
+        certificate: null,
+      };
       this.keys = [];
       this.selectedKey = null;
       this.value = null;
@@ -132,7 +144,7 @@ export default {
       this.loadingValue = true;
       if (this.connected) {
         try {
-          this.value = await invoke('get_value', {key});
+          this.value = await invoke('get_value', { key });
         } catch (e) {
           console.error('Failed to get value:', e);
           toast.error('Failed to get value: ' + e.message);
@@ -144,7 +156,7 @@ export default {
     async saveValue() {
       if (this.connected && this.selectedKey) {
         try {
-          await invoke('put_value', {key: this.selectedKey, value: this.value});
+          await invoke('put_value', { key: this.selectedKey, value: this.value });
           toast.success('Value saved successfully');
         } catch (e) {
           console.error('Failed to save value:', e);
@@ -155,7 +167,7 @@ export default {
     async deleteKey(key) {
       if (this.connected) {
         try {
-          await invoke('delete_value', {key});
+          await invoke('delete_value', { key });
           this.keys = this.keys.filter(k => k !== key);
           if (this.selectedKey === key) {
             this.selectedKey = null;
@@ -174,16 +186,7 @@ export default {
       toast.success('Connection saved successfully');
     },
     loadConnection(connection) {
-      this.address = connection.address;
-      this.token = connection.token;
-      this.sshHost = connection.sshHost;
-      this.sshUser = connection.sshUser;
-      this.sshPassword = connection.sshPassword;
-      this.sshPort = connection.sshPort;
-      this.usePassword = connection.usePassword;
-      this.useTunnel = connection.useTunnel;
-      this.useSSL = connection.useSSL;
-      this.certificate = connection.certificate ? {name: connection.certificate} : null;
+      this.connection = { ...connection };
     },
     deleteConnection(index) {
       this.savedConnections.splice(index, 1);
@@ -193,3 +196,4 @@ export default {
   },
 };
 </script>
+

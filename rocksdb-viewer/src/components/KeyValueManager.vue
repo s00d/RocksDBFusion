@@ -9,20 +9,19 @@
         </button>
       </div>
       <ul>
-        <li
-          v-for="key in keys"
-          :key="key"
-          @click="selectKey(key)"
-          class="p-2 cursor-pointer hover:bg-gray-200 flex justify-between items-center"
-        >
-          <span>{{ key }}</span>
-          <button @click.stop="deleteKey(key)" class="p-1">
-            <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
-        </li>
-      </ul>
+          <li
+            v-for="key in keys"
+            :key="key"
+            class="mb-2"
+          >
+            <button @click="selectKey(key)" class="w-full flex justify-between items-center p-2 bg-gray-100 hover:bg-gray-200 rounded">
+              <span>{{ key }}</span>
+              <svg @click.stop="deleteKey(key)" class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </li>
+        </ul>
     </div>
     <div class="w-3/4 p-4">
       <div v-if="selectedKey && editableValue !== null">

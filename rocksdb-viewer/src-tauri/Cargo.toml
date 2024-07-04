@@ -1,6 +1,6 @@
 [package]
 name = "rocksdb-viewer"
-version = "0.0.2"
+version = "0.0.3"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -14,14 +14,12 @@ tauri-build = { version = "1", features = [] }
 tauri = { version = "1", features = [ "dialog-all", "shell-open", "devtools"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rust-rocksdb = "0.26"
+rocksdb-client-rust = { version = "*", path = "../../rocksdb-client-rust" }
 log = "0.4.21"
 lazy_static = "1.4.0"
 env_logger = "0.11.3"
 tokio = "1.38.0"
 ssh2 = "0.9"
-
-
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

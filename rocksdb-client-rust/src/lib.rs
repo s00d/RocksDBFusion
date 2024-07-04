@@ -42,20 +42,45 @@ impl RequestHandler {
 
     fn get_connection(&mut self) -> Result<&mut TcpStream, String> {
         if self.connection.is_none() {
-            let addr = format!("{}:{}", self.host, self.port);
-            let stream = TcpStream::connect(&addr).map_err(|e| format!("Connection error: {}", e))?;
-            self.connection = Some(stream);
+            self.reconnect()?;
+        } else if self.connection.as_ref().unwrap().peer_addr().is_err() {
+            self.reconnect()?;
         }
         self.connection.as_mut().ok_or_else(|| "Failed to acquire connection".to_string())
     }
 
+    fn reconnect(&mut self) -> Result<(), String> {
+        let addr = format!("{}:{}", self.host, self.port);
+        let stream = TcpStream::connect(&addr).map_err(|e| format!("Connection error: {}", e))?;
+        self.connection = Some(stream);
+        Ok(())
+    }
+
     pub fn send_request(&mut self, request: Request) -> Result<Response, String> {
-        let conn = self.get_connection()?;
-
         let request_bytes = serde_json::to_vec(&request).map_err(|e| format!("Serialization error: {}", e))?;
-        conn.write_all(&request_bytes).map_err(|e| format!("Send error: {}", e))?;
-        conn.write_all(b"\n").map_err(|e| format!("Send error: {}", e))?;
 
+        {
+            let mut needs_reconnect = false;
+            // First attempt to get connection and send the request
+            if let Some(conn) = self.connection.as_mut() {
+                if let Err(_e) = conn.write_all(&request_bytes).and_then(|_| conn.write_all(b"\n")) {
+                    needs_reconnect = true;
+                }
+            } else {
+                needs_reconnect = true;
+            }
+
+            // Handle reconnection if needed
+            if needs_reconnect {
+                self.reconnect()?;
+                let conn = self.get_connection()?;
+                conn.write_all(&request_bytes).map_err(|e| format!("Send error: {}", e))?;
+                conn.write_all(b"\n").map_err(|e| format!("Send error: {}", e))?;
+            }
+        }
+
+        // Read response
+        let conn = self.get_connection()?;
         let mut reader = BufReader::new(conn);
         let mut response_bytes = Vec::new();
         reader.read_until(b'\n', &mut response_bytes).map_err(|e| format!("Receive error: {}", e))?;
